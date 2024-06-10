@@ -1,5 +1,5 @@
 """
-Main training script.
+Main training script using only raw PyTorch.
 
 Will load the FashionMNIST dataset if it can't find it locally.
 Choose model 'mlp' or 'cnn', this will load the architectures
@@ -51,8 +51,8 @@ else:
 print(f'Using device: {device}')
 
 # Choose a model architecture: MLP or CNN, set appropriate image shapes.
-# model_name = 'mlp'
-model_name = 'cnn'
+model_name = 'mlp'
+# model_name = 'cnn'
 if model_name == 'mlp':
     model = MLP().to(device, dtype=torch.float32)
     train_images = training_data.data.to(device=device, dtype=torch.float32)

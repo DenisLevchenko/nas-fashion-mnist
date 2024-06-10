@@ -1,3 +1,4 @@
 *.ipynb
 *.pth
 __pycache__
+lightning_logs
