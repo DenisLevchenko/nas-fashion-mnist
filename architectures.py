@@ -1,14 +1,14 @@
 """
 Neural architecture class definitions.
 
-Used by the main train.py
+Used by the main train.py and run_with_lightning.py.
 """
 
 import torch
 from torch import nn
 from typing import Tuple, List, Union
 
-class MLP(nn.Module):
+class MLPBasic(nn.Module):
     """Basic MLP network with fixed architecture."""
     
     def __init__(self):
@@ -27,6 +27,33 @@ class MLP(nn.Module):
         logits = self.linear_relu_stack(x)
         return logits
 
+class MLP(nn.Module):
+    """MLP class with minimally configurable layers.
+    
+    All hidden layers have the same size.
+    Args:
+        n_hidden:
+            number of hidden layers
+        size_hidden:
+            size of the hidden layers
+    """
+    
+    def __init__(self, n_hidden: int, size_hidden: int):
+        super().__init__()
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential()
+        self.linear_relu_stack.append(nn.Linear(28*28, size_hidden))
+        self.linear_relu_stack.append(nn.ReLU())
+        for i in range(n_hidden):
+            self.linear_relu_stack.append(nn.Linear(size_hidden, size_hidden))
+            self.linear_relu_stack.append(nn.ReLU())
+        self.linear_relu_stack.append(nn.Linear(size_hidden, 10))
+        
+
+    def forward(self, x):
+        x = self.flatten(x)
+        logits = self.linear_relu_stack(x)
+        return logits
 
 class CNN(nn.Module):
     """Basic 2D CNN network with three convolutional layers.
