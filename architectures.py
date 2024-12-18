@@ -27,6 +27,7 @@ class MLPBasic(nn.Module):
         logits = self.linear_relu_stack(x)
         return logits
 
+
 class MLP(nn.Module):
     """MLP class with minimally configurable layers.
     
@@ -54,6 +55,7 @@ class MLP(nn.Module):
         x = self.flatten(x)
         logits = self.linear_relu_stack(x)
         return logits
+
 
 class CNN(nn.Module):
     """Basic 2D CNN network with three convolutional layers.

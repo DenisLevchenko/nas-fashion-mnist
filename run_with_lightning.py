@@ -64,64 +64,69 @@ class MLPLight(L.LightningModule):
         return optimizer
 
 
-# init the model
-model = MLPLight(n_hidden=3, size_hidden=64, learning_rate=1e-3)
-
-# setup data
-training_data = datasets.FashionMNIST(
-    root='~/Coding/torch_tutorial',
-    train=True,
-    download=True,
-    transform=ToTensor(),
-    target_transform=Lambda(
-        lambda y: torch.zeros(10, dtype=torch.float)
-        .scatter_(0, torch.tensor(y), value=1)
+def main():
+        # init the model
+    model = MLPLight(n_hidden=3, size_hidden=64, learning_rate=1e-3)
+    
+    # setup data
+    training_data = datasets.FashionMNIST(
+        root='~/Coding/torch_tutorial',
+        train=True,
+        download=True,
+        transform=ToTensor(),
+        target_transform=Lambda(
+            lambda y: torch.zeros(10, dtype=torch.float)
+            .scatter_(0, torch.tensor(y), value=1)
+        )
     )
-)
-
-test_data = datasets.FashionMNIST(
-    root='~/Coding/torch_tutorial',
-    train=False,
-    download=True,
-    transform=ToTensor(),
-    target_transform=Lambda(
-        lambda y: torch.zeros(10, dtype=torch.float)
-        .scatter_(0, torch.tensor(y), value=1)
+    
+    test_data = datasets.FashionMNIST(
+        root='~/Coding/torch_tutorial',
+        train=False,
+        download=True,
+        transform=ToTensor(),
+        target_transform=Lambda(
+            lambda y: torch.zeros(10, dtype=torch.float)
+            .scatter_(0, torch.tensor(y), value=1)
+        )
     )
-)
+    
+    # use 20% of training data for validation
+    train_set_size = int(len(training_data) * 0.8)
+    valid_set_size = len(training_data) - train_set_size
+    
+    # split the train set into two
+    seed = torch.Generator().manual_seed(42)
+    train_set, val_set = torch.utils.data.random_split(
+        training_data, [train_set_size, valid_set_size], generator=seed)
+    
+    train_loader = DataLoader(train_set, batch_size=64, shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=64, shuffle=False)
+    test_loader = DataLoader(test_data, batch_size=64, shuffle=False)
+    
+    # setup trainer and fit the model
+    checkpoint_callback = ModelCheckpoint(
+        monitor='val_accuracy',  # Metric to monitor
+        save_top_k=1,  # Save only the best model
+        mode='max',  # Mode for monitoring metric ('min' for minimizing, 'max' for maximizing)
+        verbose=False
+    )
+    
+    early_stop_callback = EarlyStopping(
+        monitor="val_accuracy",
+        min_delta=0.00,
+        patience=5,
+        mode="max",
+        verbose=False
+    )
+    trainer = L.Trainer(callbacks=[checkpoint_callback, early_stop_callback], max_epochs=50)
+    trainer.fit(model, train_loader, val_loader)
+    
+    # Load and test the best model from checkpoint
+    best_model_path = checkpoint_callback.best_model_path
+    best_model = MLPLight.load_from_checkpoint(best_model_path)
+    trainer.test(best_model, dataloaders=test_loader)
 
-# use 20% of training data for validation
-train_set_size = int(len(training_data) * 0.8)
-valid_set_size = len(training_data) - train_set_size
 
-# split the train set into two
-seed = torch.Generator().manual_seed(42)
-train_set, val_set = torch.utils.data.random_split(
-    training_data, [train_set_size, valid_set_size], generator=seed)
-
-train_loader = DataLoader(train_set, batch_size=64, shuffle=True)
-val_loader = DataLoader(val_set, batch_size=64, shuffle=False)
-test_loader = DataLoader(test_data, batch_size=64, shuffle=False)
-
-# setup trainer and fit the model
-checkpoint_callback = ModelCheckpoint(
-    monitor='val_accuracy',  # Metric to monitor
-    save_top_k=1,  # Save only the best model
-    mode='max',  # Mode for monitoring metric ('min' for minimizing, 'max' for maximizing)
-    verbose=False
-)
-
-early_stop_callback = EarlyStopping(
-    monitor="val_accuracy",
-    min_delta=0.00,
-    patience=5,
-    mode="max",
-    verbose=False
-)
-trainer = L.Trainer(callbacks=[checkpoint_callback, early_stop_callback], max_epochs=50)
-trainer.fit(model, train_loader, val_loader)
-
-# Load and the best model from checkpoint
-best_model_path = checkpoint_callback.best_model_path
-best_model = MLPLight.load_from_checkpoint(best_model_path)
-trainer.test(best_model, dataloaders=test_loader)
+if __name__ == '__main__':
+    main()
