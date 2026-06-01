@@ -64,9 +64,58 @@ class MLPLight(L.LightningModule):
         return optimizer
 
 
+class CNNLight(L.LightningModule):
+    def __init__(self, out_channels: int, kernel_size: int, padding: str,
+                 dilation: int, act_function, dropout_rate: float,
+                 learning_rate: float):
+        super().__init__()
+        self.save_hyperparameters()
+        self.net = CNN(out_channels=out_channels, kernel_size=kernel_size,
+                       padding=padding, dilation=dilation, act_function=act_function,
+                       dropout_rate=dropout_rate)
+        self.learning_rate = learning_rate
+        self.loss = nn.CrossEntropyLoss()
+        self.accuracy = MulticlassAccuracy(num_classes=10)
+        
+    def training_step(self, batch, batch_idx):
+        # training_step defines the train loop.
+        # it is independent of forward
+        x, y = batch
+        z = self.net(x)
+        loss = self.loss(z, y)
+        # Logging to TensorBoard (if installed) by default
+        self.log("train_loss", loss)
+        return loss
+    
+    def validation_step(self, batch, batch_idx):
+        # this is the validation loop
+        x, y = batch
+        z = self.net(x)
+        val_loss = self.loss(z, y)
+        val_acc = self.accuracy(z, y.argmax(dim=1))
+        self.log("val_loss", val_loss, prog_bar=True)
+        self.log("val_accuracy", val_acc, prog_bar=True)
+        
+    def test_step(self, batch, batch_idx):
+        # this is the test loop
+        x, y = batch
+        z = self.net(x)
+        test_loss = self.loss(z, y)
+        test_acc = self.accuracy(z, y.argmax(dim=1))
+        self.log("test_loss", test_loss)
+        self.log("test_accuracy", test_acc)
+        # self.test_step_outputs.append(test_acc)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        return optimizer
+
+
 def main():
         # init the model
-    model = MLPLight(n_hidden=3, size_hidden=64, learning_rate=1e-3)
+    # model = MLPLight(n_hidden=3, size_hidden=64, learning_rate=1e-3)
+    model = CNNLight(out_channels=8, kernel_size=3, padding='same', dilation=0,
+                      act_function=nn.ReLU(), dropout_rate=0.2, learning_rate=1e-3)
     
     # setup data
     training_data = datasets.FashionMNIST(
@@ -124,7 +173,8 @@ def main():
     
     # Load and test the best model from checkpoint
     best_model_path = checkpoint_callback.best_model_path
-    best_model = MLPLight.load_from_checkpoint(best_model_path)
+    # best_model = MLPLight.load_from_checkpoint(best_model_path)
+    best_model = CNNLight.load_from_checkpoint(best_model_path)
     trainer.test(best_model, dataloaders=test_loader)
 
 
