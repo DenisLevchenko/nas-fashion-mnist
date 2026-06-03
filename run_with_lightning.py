@@ -9,7 +9,7 @@ Uses early stopping and saves the best model.
 
 import torch
 from torch import nn
-from torch.utils.data import Dataset, DataLoader, TensorDataset
+from torch.utils.data import Dataset, DataLoader, TensorDataset, random_split
 from torchvision import datasets
 from torchvision.transforms import ToTensor, Lambda
 # from torchmetrics import Accuracy
@@ -19,14 +19,15 @@ from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.cli import LightningCLI
 import matplotlib.pyplot as plt
 from typing import Tuple, List, Union
-from architectures import MLP, CNN, LitMLP, LitCNN
+from architectures import MLP, CNN
 from dataclasses import dataclass
+from lightning_definitions import LitMLP, LitCNN, FashionMNISTDataModule
 
 
 @dataclass
 class MLPConfig:
     n_hidden: int = 3
-    size_hidden: int = 32
+    size_hidden: int = 16
 
 
 @dataclass
@@ -52,48 +53,15 @@ def build_lit_module(architecture_type: str) -> L.LightningModule:
     else:
         raise ValueError(f"Unknown architecture type: {architecture_type}")
 
-# architecture_type = "mlp"
-architecture_type = "cnn"
+architecture_type = "mlp"
+# architecture_type = "cnn"
 
 def main():
     # init the LightningModule
     lit_module = build_lit_module(architecture_type)
     
-    # setup data
-    training_data = datasets.FashionMNIST(
-        root='~/Coding/torch_tutorial',
-        train=True,
-        download=True,
-        transform=ToTensor(),
-        target_transform=Lambda(
-            lambda y: torch.zeros(10, dtype=torch.float)
-            .scatter_(0, torch.tensor(y), value=1)
-        )
-    )
-    
-    test_data = datasets.FashionMNIST(
-        root='~/Coding/torch_tutorial',
-        train=False,
-        download=True,
-        transform=ToTensor(),
-        target_transform=Lambda(
-            lambda y: torch.zeros(10, dtype=torch.float)
-            .scatter_(0, torch.tensor(y), value=1)
-        )
-    )
-    
-    # use 20% of training data for validation
-    train_set_size = int(len(training_data) * 0.8)
-    valid_set_size = len(training_data) - train_set_size
-    
-    # split the train set into two
-    seed = torch.Generator().manual_seed(42)
-    train_set, val_set = torch.utils.data.random_split(
-        training_data, [train_set_size, valid_set_size], generator=seed)
-    
-    train_loader = DataLoader(train_set, batch_size=TrainConfig().batch_size, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=TrainConfig().batch_size, shuffle=False)
-    test_loader = DataLoader(test_data, batch_size=TrainConfig().batch_size, shuffle=False)
+    # init the datamodule
+    dm = FashionMNISTDataModule(batch_size=TrainConfig().batch_size)
     
     # setup trainer and fit the model
     checkpoint_callback = ModelCheckpoint(
@@ -111,7 +79,7 @@ def main():
         verbose=False
     )
     trainer = L.Trainer(callbacks=[checkpoint_callback, early_stop_callback], max_epochs=50)
-    trainer.fit(lit_module, train_loader, val_loader)
+    trainer.fit(lit_module, datamodule=dm)
     
     # Load and test the best model from checkpoint
     best_model_path = checkpoint_callback.best_model_path
@@ -121,7 +89,7 @@ def main():
         best_model = LitCNN.load_from_checkpoint(best_model_path)
     else:
         raise ValueError(f"Unknown architecture type: {architecture_type}")
-    trainer.test(best_model, dataloaders=test_loader)
+    trainer.test(best_model, datamodule=dm)
     print(f"Best model hparams: {best_model.hparams}")
 
 
