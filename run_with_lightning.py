@@ -1,7 +1,7 @@
 """
 Main script using PyTorch Lightning.
 
-Only uses MLP for now.
+Uses MLP and CNN architectures are defined in the `architectures.py` file.
 Also does validation and testing, logs everything.
 The logs are accessible through TensorBoard.
 Uses early stopping and saves the best model.
@@ -19,58 +19,14 @@ from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.cli import LightningCLI
 import matplotlib.pyplot as plt
 from typing import Tuple, List, Union
-from architectures import MLP, CNN
+from architectures import MLP, CNN, LitMLP, LitCNN
 from dataclasses import dataclass
-
-
-# define the LightningModule
-class LitModule(L.LightningModule):
-    def __init__(self, model: nn.Module, learning_rate: float):
-        super().__init__()
-        self.save_hyperparameters()
-        self.net = model
-        self.learning_rate = learning_rate
-        self.loss = nn.CrossEntropyLoss()
-        self.accuracy = MulticlassAccuracy(num_classes=10)
-        
-    def training_step(self, batch, batch_idx):
-        # training_step defines the train loop.
-        # it is independent of forward
-        x, y = batch
-        z = self.net(x)
-        loss = self.loss(z, y)
-        # Logging to TensorBoard (if installed) by default
-        self.log("train_loss", loss)
-        return loss
-    
-    def validation_step(self, batch, batch_idx):
-        # this is the validation loop
-        x, y = batch
-        z = self.net(x)
-        val_loss = self.loss(z, y)
-        val_acc = self.accuracy(z, y.argmax(dim=1))
-        self.log("val_loss", val_loss, prog_bar=True)
-        self.log("val_accuracy", val_acc, prog_bar=True)
-        
-    def test_step(self, batch, batch_idx):
-        # this is the test loop
-        x, y = batch
-        z = self.net(x)
-        test_loss = self.loss(z, y)
-        test_acc = self.accuracy(z, y.argmax(dim=1))
-        self.log("test_loss", test_loss)
-        self.log("test_accuracy", test_acc)
-        # self.test_step_outputs.append(test_acc)
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-        return optimizer
 
 
 @dataclass
 class MLPConfig:
     n_hidden: int = 3
-    size_hidden: int = 64
+    size_hidden: int = 32
 
 
 @dataclass
@@ -79,36 +35,29 @@ class CNNConfig:
     kernel_size: int = 3
     padding: str = 'same'
     dilation: int = 0
-    act_function = nn.ReLU()
     dropout_rate: float = 0.2
-
-
-@dataclass
-class ModelConfig:
-    name: str = "mlp"
-    cfg: object = MLPConfig()
 
 
 @dataclass
 class TrainConfig:
     lr: float = 1e-3
-    batch_size: int = 32
+    batch_size: int = 64
 
 
-def build_model(model_config):
-    if model_config.name == "mlp":
-        return MLP(**model_config.cfg.__dict__)
-    elif model_config.name == "cnn":
-        return CNN(**model_config.cfg.__dict__)
+def build_lit_module(architecture_type: str) -> L.LightningModule:
+    if architecture_type == "mlp":
+        return LitMLP(learning_rate=TrainConfig().lr, **MLPConfig().__dict__)
+    elif architecture_type == "cnn":
+        return LitCNN(learning_rate=TrainConfig().lr, **CNNConfig().__dict__)
     else:
-        raise ValueError(f"Unknown model: {model_config.name}")
+        raise ValueError(f"Unknown architecture type: {architecture_type}")
 
+# architecture_type = "mlp"
+architecture_type = "cnn"
 
 def main():
-    # init the PyTorch model
-    model = build_model(ModelConfig())
     # init the LightningModule
-    lit_module = LitModule(model=model, learning_rate=TrainConfig().lr)
+    lit_module = build_lit_module(architecture_type)
     
     # setup data
     training_data = datasets.FashionMNIST(
@@ -142,9 +91,9 @@ def main():
     train_set, val_set = torch.utils.data.random_split(
         training_data, [train_set_size, valid_set_size], generator=seed)
     
-    train_loader = DataLoader(train_set, batch_size=64, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=64, shuffle=False)
-    test_loader = DataLoader(test_data, batch_size=64, shuffle=False)
+    train_loader = DataLoader(train_set, batch_size=TrainConfig().batch_size, shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=TrainConfig().batch_size, shuffle=False)
+    test_loader = DataLoader(test_data, batch_size=TrainConfig().batch_size, shuffle=False)
     
     # setup trainer and fit the model
     checkpoint_callback = ModelCheckpoint(
@@ -166,8 +115,14 @@ def main():
     
     # Load and test the best model from checkpoint
     best_model_path = checkpoint_callback.best_model_path
-    best_model = LitModule.load_from_checkpoint(best_model_path)
+    if architecture_type == "mlp":
+        best_model = LitMLP.load_from_checkpoint(best_model_path)
+    elif architecture_type == "cnn":
+        best_model = LitCNN.load_from_checkpoint(best_model_path)
+    else:
+        raise ValueError(f"Unknown architecture type: {architecture_type}")
     trainer.test(best_model, dataloaders=test_loader)
+    print(f"Best model hparams: {best_model.hparams}")
 
 
 if __name__ == '__main__':
