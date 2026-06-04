@@ -104,6 +104,14 @@ class LitCNN(L.LightningModule):
         return optimizer
 
 
+def one_hot(y):
+    return torch.zeros(10, dtype=torch.float).scatter_(
+        0,
+        torch.tensor(y),
+        value=1
+    )
+
+
 class FashionMNISTDataModule(L.LightningDataModule):
     def __init__(self, data_dir: str = "~/Coding/torch_tutorial", batch_size: int = 32):
         super().__init__()
@@ -122,10 +130,7 @@ class FashionMNISTDataModule(L.LightningDataModule):
             train=True,
             download=True,
             transform=ToTensor(),
-            target_transform=Lambda(
-                lambda y: torch.zeros(10, dtype=torch.float)
-                .scatter_(0, torch.tensor(y), value=1)
-            )
+            target_transform=one_hot
         )
         
         test_data = datasets.FashionMNIST(
@@ -133,10 +138,7 @@ class FashionMNISTDataModule(L.LightningDataModule):
             train=False,
             download=True,
             transform=ToTensor(),
-            target_transform=Lambda(
-                lambda y: torch.zeros(10, dtype=torch.float)
-                .scatter_(0, torch.tensor(y), value=1)
-            )
+            target_transform=one_hot
         )
         
         # split the train set into two
@@ -149,10 +151,13 @@ class FashionMNISTDataModule(L.LightningDataModule):
         self.test_set = test_data
     
     def train_dataloader(self):
-        return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True)
+        return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True,
+                          num_workers=8, pin_memory=True, persistent_workers=True)
     
     def val_dataloader(self):
-        return DataLoader(self.val_set, batch_size=self.batch_size)
+        return DataLoader(self.val_set, batch_size=self.batch_size,
+                          num_workers=8, pin_memory=True, persistent_workers=True)
     
     def test_dataloader(self):
-        return DataLoader(self.test_set, batch_size=self.batch_size)
+        return DataLoader(self.test_set, batch_size=self.batch_size,
+                          num_workers=8, pin_memory=True, persistent_workers=True)

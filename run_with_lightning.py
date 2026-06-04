@@ -17,7 +17,7 @@ from torchmetrics.classification import MulticlassAccuracy
 import lightning as L
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.cli import LightningCLI
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from typing import Tuple, List, Union
 from architectures import MLP, CNN
 from dataclasses import dataclass
@@ -41,8 +41,8 @@ class CNNConfig:
 
 @dataclass
 class TrainConfig:
-    lr: float = 1e-3
-    batch_size: int = 64
+    lr: float = 16e-3
+    batch_size: int = 1024
 
 
 def build_lit_module(architecture_type: str) -> L.LightningModule:
@@ -78,7 +78,7 @@ def main():
         mode="max",
         verbose=False
     )
-    trainer = L.Trainer(callbacks=[checkpoint_callback, early_stop_callback], max_epochs=50)
+    trainer = L.Trainer(profiler='simple', callbacks=[checkpoint_callback, early_stop_callback], max_epochs=50)
     trainer.fit(lit_module, datamodule=dm)
     
     # Load and test the best model from checkpoint
