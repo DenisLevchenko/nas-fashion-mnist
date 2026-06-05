@@ -21,8 +21,9 @@ from lightning.pytorch.cli import LightningCLI
 from typing import Tuple, List, Union
 from architectures import MLP, CNN
 from dataclasses import dataclass
-from lightning_definitions import LitMLP, LitCNN, FashionMNISTDataModule
+from lightning_definitions import FashionMNISTGPUDataModule, LitMLP, LitCNN, FashionMNISTDataModule
 
+torch.set_float32_matmul_precision("high")
 
 @dataclass
 class MLPConfig:
@@ -41,8 +42,8 @@ class CNNConfig:
 
 @dataclass
 class TrainConfig:
-    lr: float = 16e-3
-    batch_size: int = 1024
+    lr: float = 8e-3
+    batch_size: int = 512
 
 
 def build_lit_module(architecture_type: str) -> L.LightningModule:
@@ -56,12 +57,19 @@ def build_lit_module(architecture_type: str) -> L.LightningModule:
 architecture_type = "mlp"
 # architecture_type = "cnn"
 
+# set if want to load whole datamodule on GPU once (instead of loading batches on GPU one by one)
+# dm_full_gpu = True
+dm_full_gpu = False
+
 def main():
     # init the LightningModule
     lit_module = build_lit_module(architecture_type)
     
     # init the datamodule
-    dm = FashionMNISTDataModule(batch_size=TrainConfig().batch_size)
+    if dm_full_gpu:
+        dm = FashionMNISTGPUDataModule(batch_size=TrainConfig().batch_size)
+    else:
+        dm = FashionMNISTDataModule(batch_size=TrainConfig().batch_size)
     
     # setup trainer and fit the model
     checkpoint_callback = ModelCheckpoint(

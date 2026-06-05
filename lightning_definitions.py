@@ -161,3 +161,93 @@ class FashionMNISTDataModule(L.LightningDataModule):
     def test_dataloader(self):
         return DataLoader(self.test_set, batch_size=self.batch_size,
                           num_workers=8, pin_memory=True, persistent_workers=True)
+
+
+class FashionMNISTGPUDataModule(L.LightningDataModule):
+    def __init__(
+        self,
+        data_dir="~/Coding/torch_tutorial",
+        batch_size=512,
+        pin_to_gpu=True,
+        device="cuda"
+    ):
+        super().__init__()
+        self.data_dir = data_dir
+        self.batch_size = batch_size
+        self.pin_to_gpu = pin_to_gpu
+        self.device = device
+
+    def prepare_data(self):
+        datasets.FashionMNIST(self.data_dir, train=True, download=True)
+        datasets.FashionMNIST(self.data_dir, train=False, download=True)
+
+    def setup(self, stage=None):
+
+        def load_split(train: bool):
+            ds = datasets.FashionMNIST(
+                root=self.data_dir,
+                train=train,
+                download=False
+            )
+
+            xs = []
+            ys = []
+
+            for x, y in ds:
+                xs.append(ToTensor()(x))
+                ys.append(one_hot(y))
+
+            x = torch.stack(xs)          # [N, 1, 28, 28]
+            y = torch.stack(ys)          # [N, 10]
+
+            return x, y
+
+        # ---- load full datasets into memory ----
+        x_train, y_train = load_split(train=True)
+        x_test, y_test = load_split(train=False)
+
+        # ---- split train/val ----
+        n = len(x_train)
+        n_train = int(0.8 * n)
+        n_val = n - n_train
+
+        g = torch.Generator().manual_seed(42)
+        perm = torch.randperm(n, generator=g)
+
+        train_idx = perm[:n_train]
+        val_idx = perm[n_train:]
+
+        train_x, train_y = x_train[train_idx], y_train[train_idx]
+        val_x, val_y = x_train[val_idx], y_train[val_idx]
+
+        # ---- optionally move everything to GPU once ----
+        if self.pin_to_gpu:
+            train_x = train_x.to(self.device)
+            train_y = train_y.to(self.device)
+            val_x = val_x.to(self.device)
+            val_y = val_y.to(self.device)
+            x_test = x_test.to(self.device)
+            y_test = y_test.to(self.device)
+
+        self.train_set = TensorDataset(train_x, train_y)
+        self.val_set = TensorDataset(val_x, val_y)
+        self.test_set = TensorDataset(x_test, y_test)
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.train_set,
+            batch_size=self.batch_size,
+            shuffle=True
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.val_set,
+            batch_size=self.batch_size
+        )
+
+    def test_dataloader(self):
+        return DataLoader(
+            self.test_set,
+            batch_size=self.batch_size
+        )
