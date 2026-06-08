@@ -33,17 +33,19 @@ class MLPConfig:
 
 @dataclass
 class CNNConfig:
-    out_channels: int = 8
+    out_channels: int = 16
+    n_intermediate: int = 1
     kernel_size: int = 3
     padding: str = 'same'
-    dilation: int = 0
-    dropout_rate: float = 0.2
+    dilation: int = 1
+    dropout_rate: float = 0
 
 
 @dataclass
 class TrainConfig:
     lr: float = 8e-3
     batch_size: int = 512
+    profiler: str = None # 'simple' or 'advanced' or 'pytorch' or None
 
 
 def build_lit_module(architecture_type: str) -> L.LightningModule:
@@ -54,8 +56,8 @@ def build_lit_module(architecture_type: str) -> L.LightningModule:
     else:
         raise ValueError(f"Unknown architecture type: {architecture_type}")
 
-architecture_type = "mlp"
-# architecture_type = "cnn"
+# architecture_type = "mlp"
+architecture_type = "cnn"
 
 # set if want to load whole datamodule on GPU once (instead of loading batches on GPU one by one)
 # dm_full_gpu = True
@@ -86,7 +88,7 @@ def main():
         mode="max",
         verbose=False
     )
-    trainer = L.Trainer(profiler='simple', callbacks=[checkpoint_callback, early_stop_callback], max_epochs=50)
+    trainer = L.Trainer(callbacks=[checkpoint_callback, early_stop_callback], max_epochs=50)
     trainer.fit(lit_module, datamodule=dm)
     
     # Load and test the best model from checkpoint

@@ -57,14 +57,14 @@ class LitMLP(L.LightningModule):
 
 
 class LitCNN(L.LightningModule):
-    def __init__(self, out_channels: int,
+    def __init__(self, out_channels: int, n_intermediate: int,
                  kernel_size: Union[int, Tuple[int, int]],
                  padding: Union[int, Tuple[int, int], str],
                  dilation: Union[int, Tuple[int, int]],
                  dropout_rate: float, learning_rate: float):
         super().__init__()
         self.save_hyperparameters()
-        self.net = CNN(out_channels=out_channels, kernel_size=kernel_size, padding=padding,
+        self.net = CNN(out_channels=out_channels, n_intermediate=n_intermediate, kernel_size=kernel_size, padding=padding,
                        dilation=dilation, dropout_rate=dropout_rate)
         self.learning_rate = learning_rate
         self.loss = nn.CrossEntropyLoss()

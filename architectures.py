@@ -57,7 +57,7 @@ class MLP(nn.Module):
         return logits
 
 
-class CNN(nn.Module):
+class CNNBasic(nn.Module):
     """Basic 2D CNN network with three convolutional layers.
     
     Args:
@@ -104,6 +104,60 @@ class CNN(nn.Module):
         output = self.conv_stack2(output)
         output = self.conv_stack3(output)
         output = output.view(-1, 32)
+        if self.dropout_rate > 0:
+            output = self.dropout(output)
+        logits = self.dense(output)
+        return logits
+
+
+class CNN(nn.Module):
+    """Basic 2D CNN network with configurable parameters.
+    
+    Args:
+        out_channels:
+            how many output channels/ conv filters
+        kernel_size:
+            kernel size for convolution
+        padding:
+            padding for the convolution operation:
+            'same' or 'valid' or int or Tuple[int, int]
+        dilation:
+            dilation for the convolution operation
+        dropout_rate:
+            if nonzero, dropout rate for the final dense layer
+    """
+    
+    def __init__(self, out_channels: int = 8, n_intermediate: int = 1,
+                 kernel_size: Union[int, Tuple[int, int]] = 3,
+                 padding: Union[int, Tuple[int, int], str] = 'same',
+                 stride: int = 1,
+                 dilation: Union[int, Tuple[int, int]] = 1,
+                 dropout_rate: float = 0):
+        super().__init__()
+        self.out_channels = out_channels
+        self.dropout_rate = dropout_rate
+        conv1 = nn.Conv2d(in_channels=1, out_channels=self.out_channels,
+                          kernel_size=kernel_size, padding=padding)
+        max_pool = nn.MaxPool2d(2)
+        conv2 = nn.Conv2d(in_channels=self.out_channels,
+                          out_channels=self.out_channels,
+                          kernel_size=kernel_size, padding=padding)
+        self.conv_stack1 = nn.Sequential(conv1, nn.ReLU(), conv2, nn.ReLU(), max_pool)
+        self.conv_stack2 = nn.Sequential(conv2, nn.ReLU(), conv2, nn.ReLU(), max_pool)
+        self.conv_stack3 = nn.Sequential(conv2, nn.ReLU(), conv2, nn.ReLU(), nn.AdaptiveAvgPool2d(3))
+        self.conv_net = nn.Sequential()
+        self.conv_net.append(self.conv_stack1)
+        for i in range(n_intermediate):
+            self.conv_net.append(self.conv_stack2)
+        self.conv_net.append(self.conv_stack3)
+
+        if dropout_rate > 0:
+            self.dropout = nn.Dropout(p=dropout_rate)
+        self.dense = nn.Linear(self.out_channels * 3 * 3, 10)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        output = self.conv_net(x)
+        output = output.view(-1, self.out_channels * 3 * 3)
         if self.dropout_rate > 0:
             output = self.dropout(output)
         logits = self.dense(output)
