@@ -10,7 +10,7 @@ from torchvision.transforms import ToTensor, Lambda
 import lightning as L
 from torchmetrics.classification import MulticlassAccuracy
 from typing import Tuple, List, Union
-from architectures import MLP, CNN
+from architectures import MLP, CNN, CNNRich
 
 # define the LightningModule
 class LitMLP(L.LightningModule):
@@ -76,8 +76,60 @@ class LitCNN(L.LightningModule):
         x, y = batch
         z = self.net(x)
         loss = self.loss(z, y)
+        acc = self.accuracy(z, y.argmax(dim=1))
         # Logging to TensorBoard (if installed) by default
         self.log("train_loss", loss)
+        self.log("train_accuracy", acc)
+        return loss
+    
+    def validation_step(self, batch, batch_idx):
+        # this is the validation loop
+        x, y = batch
+        z = self.net(x)
+        val_loss = self.loss(z, y)
+        val_acc = self.accuracy(z, y.argmax(dim=1))
+        self.log("val_loss", val_loss, prog_bar=True)
+        self.log("val_accuracy", val_acc, prog_bar=True)
+        
+    def test_step(self, batch, batch_idx):
+        # this is the test loop
+        x, y = batch
+        z = self.net(x)
+        test_loss = self.loss(z, y)
+        test_acc = self.accuracy(z, y.argmax(dim=1))
+        self.log("test_loss", test_loss)
+        self.log("test_accuracy", test_acc)
+        # self.test_step_outputs.append(test_acc)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        return optimizer
+
+
+class LitCNNRich(L.LightningModule):
+    def __init__(self, out_channels: int, n_intermediate: int,
+                 kernel_size: Union[int, Tuple[int, int]],
+                 padding: Union[int, Tuple[int, int], str],
+                 dilation: Union[int, Tuple[int, int]],
+                 dropout_rate: float, learning_rate: float):
+        super().__init__()
+        self.save_hyperparameters()
+        self.net = CNNRich(out_channels=out_channels, n_intermediate=n_intermediate, kernel_size=kernel_size, padding=padding,
+                       dilation=dilation, dropout_rate=dropout_rate)
+        self.learning_rate = learning_rate
+        self.loss = nn.CrossEntropyLoss()
+        self.accuracy = MulticlassAccuracy(num_classes=10)
+        
+    def training_step(self, batch, batch_idx):
+        # training_step defines the train loop.
+        # it is independent of forward
+        x, y = batch
+        z = self.net(x)
+        loss = self.loss(z, y)
+        acc = self.accuracy(z, y.argmax(dim=1))
+        # Logging to TensorBoard (if installed) by default
+        self.log("train_loss", loss)
+        self.log("train_accuracy", acc)
         return loss
     
     def validation_step(self, batch, batch_idx):

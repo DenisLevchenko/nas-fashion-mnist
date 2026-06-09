@@ -70,21 +70,21 @@ def objective_mlp(trial):
 
 
 def objective_cnn(trial):
-    dropout = trial.suggest_categorical("dropout", [True, False])
-    if dropout:
-        dropout_rate = trial.suggest_float("dropout_rate", 0.1, 0.5)
-    else:
-        dropout_rate = 0
+    # dropout = trial.suggest_categorical("dropout", [True, False])
+    # if dropout:
+    #     dropout_rate = trial.suggest_float("dropout_rate", 0.1, 0.5)
+    # else:
+    #     dropout_rate = 0
     config = CNNConfig(
         out_channels=trial.suggest_int("out_channels", 4, 32, log=True),
         n_intermediate=trial.suggest_int("n_intermediate", 0, 2),
-        kernel_size=trial.suggest_int("kernel_size", 3, 7),
+        kernel_size=trial.suggest_int("kernel_size", 3, 7, 2),
         padding='same',
         dilation=1,
-        dropout_rate=dropout_rate
+        dropout_rate=0
     )
-    
-    lit_module = LitCNN(learning_rate=TrainConfig().lr, **config.__dict__)
+    lr = trial.suggest_float("lr", 1e-4, 1e-1, log=True)
+    lit_module = LitCNN(learning_rate=lr, **config.__dict__)
     
     # setup trainer and fit the model
     checkpoint_callback = ModelCheckpoint(
@@ -101,7 +101,7 @@ def objective_cnn(trial):
         mode="max",
         verbose=False
     )
-    trainer = L.Trainer(callbacks=[checkpoint_callback, early_stop_callback], max_epochs=50)
+    trainer = L.Trainer(callbacks=[checkpoint_callback, early_stop_callback], max_epochs=100)
     trainer.fit(lit_module, datamodule=dm)
     
     best_val_accuracy = checkpoint_callback.best_model_score.item()
@@ -112,7 +112,7 @@ def main():
     # init the datamodule
     # setup optuna study
     optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
-    study_name = f"{architecture_type}_optimization_all"
+    study_name = f"{architecture_type}_no_dropout"
     storage_name = f"sqlite:///{study_name}.db"
     study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize', load_if_exists=True)
     if architecture_type == "mlp":

@@ -21,7 +21,7 @@ from lightning.pytorch.cli import LightningCLI
 from typing import Tuple, List, Union
 from architectures import MLP, CNN
 from dataclasses import dataclass
-from lightning_definitions import FashionMNISTGPUDataModule, LitMLP, LitCNN, FashionMNISTDataModule
+from lightning_definitions import FashionMNISTGPUDataModule, LitMLP, LitCNN, LitCNNRich, FashionMNISTDataModule
 
 torch.set_float32_matmul_precision("high")
 
@@ -33,7 +33,7 @@ class MLPConfig:
 
 @dataclass
 class CNNConfig:
-    out_channels: int = 16
+    out_channels: int = 32
     n_intermediate: int = 1
     kernel_size: int = 3
     padding: str = 'same'
@@ -43,7 +43,7 @@ class CNNConfig:
 
 @dataclass
 class TrainConfig:
-    lr: float = 8e-3
+    lr: float = 1e-3
     batch_size: int = 512
     profiler: str = None # 'simple' or 'advanced' or 'pytorch' or None
 
@@ -53,11 +53,15 @@ def build_lit_module(architecture_type: str) -> L.LightningModule:
         return LitMLP(learning_rate=TrainConfig().lr, **MLPConfig().__dict__)
     elif architecture_type == "cnn":
         return LitCNN(learning_rate=TrainConfig().lr, **CNNConfig().__dict__)
+    elif architecture_type == "cnn_rich":
+        return LitCNNRich(learning_rate=TrainConfig().lr, **CNNConfig().__dict__)
     else:
         raise ValueError(f"Unknown architecture type: {architecture_type}")
 
 # architecture_type = "mlp"
-architecture_type = "cnn"
+# architecture_type = "cnn"
+architecture_type = "cnn_rich"
+
 
 # set if want to load whole datamodule on GPU once (instead of loading batches on GPU one by one)
 # dm_full_gpu = True
@@ -84,11 +88,12 @@ def main():
     early_stop_callback = EarlyStopping(
         monitor="val_accuracy",
         min_delta=0.00,
-        patience=5,
+        patience=10,
         mode="max",
         verbose=False
     )
-    trainer = L.Trainer(callbacks=[checkpoint_callback, early_stop_callback], max_epochs=50)
+    print(lit_module)
+    trainer = L.Trainer(callbacks=[checkpoint_callback, early_stop_callback], max_epochs=100)
     trainer.fit(lit_module, datamodule=dm)
     
     # Load and test the best model from checkpoint
@@ -97,6 +102,8 @@ def main():
         best_model = LitMLP.load_from_checkpoint(best_model_path)
     elif architecture_type == "cnn":
         best_model = LitCNN.load_from_checkpoint(best_model_path)
+    elif architecture_type == "cnn_rich":
+        best_model = LitCNNRich.load_from_checkpoint(best_model_path)
     else:
         raise ValueError(f"Unknown architecture type: {architecture_type}")
     trainer.test(best_model, datamodule=dm)
