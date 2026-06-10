@@ -21,7 +21,7 @@ from lightning.pytorch.cli import LightningCLI
 from typing import Tuple, List, Union
 from architectures import MLP, CNN
 from dataclasses import dataclass
-from lightning_definitions import FashionMNISTGPUDataModule, LitMLP, LitCNN, LitCNNRich, FashionMNISTDataModule
+from lightning_definitions import FashionMNISTGPUDataModule, LitMLP, LitCNN, LitCNNRich, LitCNNExpand, FashionMNISTDataModule
 
 torch.set_float32_matmul_precision("high")
 
@@ -38,13 +38,14 @@ class CNNConfig:
     kernel_size: int = 3
     padding: str = 'same'
     dilation: int = 1
-    dropout_rate: float = 0
+    dropout_rate: float = 0.2
 
 
 @dataclass
 class TrainConfig:
-    lr: float = 1e-3
-    batch_size: int = 512
+    lr: float = 4e-3
+    wd: float = 1e-4
+    batch_size: int = 256
     profiler: str = None # 'simple' or 'advanced' or 'pytorch' or None
 
 
@@ -54,13 +55,16 @@ def build_lit_module(architecture_type: str) -> L.LightningModule:
     elif architecture_type == "cnn":
         return LitCNN(learning_rate=TrainConfig().lr, **CNNConfig().__dict__)
     elif architecture_type == "cnn_rich":
-        return LitCNNRich(learning_rate=TrainConfig().lr, **CNNConfig().__dict__)
+        return LitCNNRich(learning_rate=TrainConfig().lr, weight_decay=TrainConfig().wd, **CNNConfig().__dict__)
+    elif architecture_type == "cnn_expand":
+        return LitCNNExpand(learning_rate=TrainConfig().lr, weight_decay=TrainConfig().wd, **CNNConfig().__dict__)
     else:
         raise ValueError(f"Unknown architecture type: {architecture_type}")
 
 # architecture_type = "mlp"
 # architecture_type = "cnn"
-architecture_type = "cnn_rich"
+# architecture_type = "cnn_rich"
+architecture_type = "cnn_expand"
 
 
 # set if want to load whole datamodule on GPU once (instead of loading batches on GPU one by one)
@@ -104,10 +108,12 @@ def main():
         best_model = LitCNN.load_from_checkpoint(best_model_path)
     elif architecture_type == "cnn_rich":
         best_model = LitCNNRich.load_from_checkpoint(best_model_path)
+    elif architecture_type == "cnn_expand":
+        best_model = LitCNNExpand.load_from_checkpoint(best_model_path)
     else:
         raise ValueError(f"Unknown architecture type: {architecture_type}")
     trainer.test(best_model, datamodule=dm)
-    print(f"Best model hparams: {best_model.hparams}")
+    print(f"Model hparams: {best_model.hparams}")
 
 
 if __name__ == '__main__':

@@ -6,11 +6,11 @@ import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader, TensorDataset, random_split
 from torchvision import datasets
-from torchvision.transforms import ToTensor, Lambda
+import torchvision.transforms as T
 import lightning as L
 from torchmetrics.classification import MulticlassAccuracy
 from typing import Tuple, List, Union
-from architectures import MLP, CNN, CNNRich
+from architectures import MLP, CNN, CNNExpand, CNNRich
 
 # define the LightningModule
 class LitMLP(L.LightningModule):
@@ -111,12 +111,14 @@ class LitCNNRich(L.LightningModule):
                  kernel_size: Union[int, Tuple[int, int]],
                  padding: Union[int, Tuple[int, int], str],
                  dilation: Union[int, Tuple[int, int]],
-                 dropout_rate: float, learning_rate: float):
+                 dropout_rate: float,
+                 learning_rate: float, weight_decay: float):
         super().__init__()
         self.save_hyperparameters()
         self.net = CNNRich(out_channels=out_channels, n_intermediate=n_intermediate, kernel_size=kernel_size, padding=padding,
                        dilation=dilation, dropout_rate=dropout_rate)
         self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
         self.loss = nn.CrossEntropyLoss()
         self.accuracy = MulticlassAccuracy(num_classes=10)
         
@@ -126,7 +128,7 @@ class LitCNNRich(L.LightningModule):
         x, y = batch
         z = self.net(x)
         loss = self.loss(z, y)
-        acc = self.accuracy(z, y.argmax(dim=1))
+        acc = self.accuracy(z, y)
         # Logging to TensorBoard (if installed) by default
         self.log("train_loss", loss)
         self.log("train_accuracy", acc)
@@ -137,7 +139,7 @@ class LitCNNRich(L.LightningModule):
         x, y = batch
         z = self.net(x)
         val_loss = self.loss(z, y)
-        val_acc = self.accuracy(z, y.argmax(dim=1))
+        val_acc = self.accuracy(z, y)
         self.log("val_loss", val_loss, prog_bar=True)
         self.log("val_accuracy", val_acc, prog_bar=True)
         
@@ -146,15 +148,66 @@ class LitCNNRich(L.LightningModule):
         x, y = batch
         z = self.net(x)
         test_loss = self.loss(z, y)
-        test_acc = self.accuracy(z, y.argmax(dim=1))
+        test_acc = self.accuracy(z, y)
         self.log("test_loss", test_loss)
         self.log("test_accuracy", test_acc)
         # self.test_step_outputs.append(test_acc)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         return optimizer
 
+
+class LitCNNExpand(L.LightningModule):
+    def __init__(self, out_channels: int, n_intermediate: int,
+                 kernel_size: Union[int, Tuple[int, int]],
+                 padding: Union[int, Tuple[int, int], str],
+                 dilation: Union[int, Tuple[int, int]],
+                 dropout_rate: float,
+                 learning_rate: float, weight_decay: float):
+        super().__init__()
+        self.save_hyperparameters()
+        self.net = CNNExpand(out_channels=out_channels, n_intermediate=n_intermediate, kernel_size=kernel_size, padding=padding,
+                       dilation=dilation, dropout_rate=dropout_rate)
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.loss = nn.CrossEntropyLoss()
+        self.accuracy = MulticlassAccuracy(num_classes=10)
+        
+    def training_step(self, batch, batch_idx):
+        # training_step defines the train loop.
+        # it is independent of forward
+        x, y = batch
+        z = self.net(x)
+        loss = self.loss(z, y)
+        acc = self.accuracy(z, y)
+        # Logging to TensorBoard (if installed) by default
+        self.log("train_loss", loss)
+        self.log("train_accuracy", acc)
+        return loss
+    
+    def validation_step(self, batch, batch_idx):
+        # this is the validation loop
+        x, y = batch
+        z = self.net(x)
+        val_loss = self.loss(z, y)
+        val_acc = self.accuracy(z, y)
+        self.log("val_loss", val_loss, prog_bar=True)
+        self.log("val_accuracy", val_acc, prog_bar=True)
+        
+    def test_step(self, batch, batch_idx):
+        # this is the test loop
+        x, y = batch
+        z = self.net(x)
+        test_loss = self.loss(z, y)
+        test_acc = self.accuracy(z, y)
+        self.log("test_loss", test_loss)
+        self.log("test_accuracy", test_acc)
+        # self.test_step_outputs.append(test_acc)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        return optimizer
 
 def one_hot(y):
     return torch.zeros(10, dtype=torch.float).scatter_(
@@ -176,21 +229,21 @@ class FashionMNISTDataModule(L.LightningDataModule):
         datasets.FashionMNIST(root=self.data_dir, train=False, download=True)
     
     def setup(self, stage=None):
+        transform = T.Compose([T.ToTensor(), T.Normalize((0.2860,), (0.3530,))  # Fashion-MNIST stats
+        ])
         # load data and split into train and val
         training_data = datasets.FashionMNIST(
             root=self.data_dir,
             train=True,
             download=True,
-            transform=ToTensor(),
-            target_transform=one_hot
+            transform=transform
         )
         
         test_data = datasets.FashionMNIST(
             root=self.data_dir,
             train=False,
             download=True,
-            transform=ToTensor(),
-            target_transform=one_hot
+            transform=transform
         )
         
         # split the train set into two
