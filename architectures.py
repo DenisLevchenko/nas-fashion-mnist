@@ -7,8 +7,33 @@ Used by the main train.py and run_with_lightning.py.
 import torch
 from torch import nn
 from typing import Tuple, List, Union
+from dataclasses import dataclass
 import lightning as L
 from torchmetrics.classification import MulticlassAccuracy
+
+@dataclass
+class MLPConfig:
+    n_hidden: int = 3
+    size_hidden: int = 16
+
+
+@dataclass
+class CNNConfig:
+    out_channels: int = 32
+    n_intermediate: int = 1
+    kernel_size: int = 3
+    padding: str = 'same'
+    dilation: int = 1
+    dropout_rate: float = 0.2
+
+
+@dataclass
+class TrainConfig:
+    lr: float = 4e-3
+    wd: float = 1e-4
+    batch_size: int = 128
+    profiler: str = None # 'simple' or 'advanced' or 'pytorch' or None
+
 
 class MLPBasic(nn.Module):
     """Basic MLP network with fixed architecture."""
@@ -165,7 +190,7 @@ class CNN(nn.Module):
 
 
 class CNNRich(nn.Module):
-    """Basic 2D CNN network with configurable parameters.
+    """Basic 2D CNN network with configurable parameters and batch normalization.
     
     Args:
         out_channels:
@@ -197,18 +222,19 @@ class CNNRich(nn.Module):
                              kernel_size=kernel_size, padding=padding)
         def batch_norm(out_channels):
             return nn.BatchNorm2d(out_channels)
-        conv_stack1 = nn.Sequential(conv(1, self.out_channels), batch_norm(self.out_channels), nn.ReLU(), conv(self.out_channels, self.out_channels), batch_norm(self.out_channels), nn.ReLU(), max_pool)
+        # two convolutions, with increasing number of filters before first pooling
+        conv_stack1 = nn.Sequential(conv(1, self.out_channels), batch_norm(self.out_channels), nn.ReLU(), conv(self.out_channels, 2* self.out_channels), batch_norm(2 * self.out_channels), nn.ReLU(), max_pool)
         def conv_stack2(in_channels, out_channels):
             return nn.Sequential(conv(in_channels, out_channels), batch_norm(out_channels), nn.ReLU(), conv(out_channels, out_channels), batch_norm(out_channels), nn.ReLU(), max_pool)
-        def conv_stack_last(in_channels, out_channels):
-            return nn.Sequential(conv(in_channels, out_channels), batch_norm(out_channels), nn.ReLU(), conv(out_channels, out_channels), batch_norm(out_channels), nn.ReLU(), nn.AdaptiveAvgPool2d(1))
+        def conv_stack_last(in_channels):
+            return nn.Sequential(conv(in_channels, in_channels), batch_norm(in_channels), nn.ReLU(), nn.AdaptiveAvgPool2d(1))
         self.conv_net = nn.Sequential()
         self.conv_net.append(conv_stack1)
-        n = 0
+        n = 1
         for i in range(n_intermediate):
             self.conv_net.append(conv_stack2(self.out_channels * (2 ** n), self.out_channels * (2 ** (n+1))))
             n += 1
-        self.conv_net.append(conv_stack_last(self.out_channels * (2 ** (n_intermediate)), self.out_channels * (2 ** (n_intermediate + 1))))
+        self.conv_net.append(conv_stack_last(self.out_channels * (2 ** (n_intermediate + 1))))
         self.flatten = nn.Flatten()
         if dropout_rate > 0:
             self.dropout = nn.Dropout(p=dropout_rate)

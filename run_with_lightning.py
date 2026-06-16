@@ -20,8 +20,8 @@ from lightning.pytorch.cli import LightningCLI
 # import matplotlib.pyplot as plt
 from typing import Tuple, List, Union
 from architectures import MLP, CNN
-from dataclasses import dataclass
-from lightning_definitions import FashionMNISTGPUDataModule, LitMLP, LitCNN, LitCNNRich, LitCNNExpand, FashionMNISTDataModule
+from dataclasses import dataclass, asdict
+from lightning_definitions import LitMLP, LitCNN, LitCNNRich, LitCNNExpand, FashionMNISTDataModule, FashionMNISTNoAugment
 
 torch.set_float32_matmul_precision("high")
 
@@ -33,53 +33,52 @@ class MLPConfig:
 
 @dataclass
 class CNNConfig:
-    out_channels: int = 32
-    n_intermediate: int = 1
+    out_channels: int = 51
+    n_intermediate: int = 2
     kernel_size: int = 3
     padding: str = 'same'
     dilation: int = 1
-    dropout_rate: float = 0.2
+    dropout_rate: float = 0.21
 
 
 @dataclass
 class TrainConfig:
-    lr: float = 4e-3
-    wd: float = 1e-4
-    batch_size: int = 256
-    profiler: str = None # 'simple' or 'advanced' or 'pytorch' or None
+    learning_rate: float = 7.71e-4
+    weight_decay: float = 2.14e-4
+    batch_size: int = 128
 
 
 def build_lit_module(architecture_type: str) -> L.LightningModule:
     if architecture_type == "mlp":
-        return LitMLP(learning_rate=TrainConfig().lr, **MLPConfig().__dict__)
+        return LitMLP(learning_rate=TrainConfig().learning_rate, **MLPConfig().__dict__)
     elif architecture_type == "cnn":
-        return LitCNN(learning_rate=TrainConfig().lr, **CNNConfig().__dict__)
+        return LitCNN(learning_rate=TrainConfig().learning_rate, **CNNConfig().__dict__)
     elif architecture_type == "cnn_rich":
-        return LitCNNRich(learning_rate=TrainConfig().lr, weight_decay=TrainConfig().wd, **CNNConfig().__dict__)
+        return LitCNNRich(learning_rate=TrainConfig().learning_rate, weight_decay=TrainConfig().weight_decay, **CNNConfig().__dict__)
     elif architecture_type == "cnn_expand":
-        return LitCNNExpand(learning_rate=TrainConfig().lr, weight_decay=TrainConfig().wd, **CNNConfig().__dict__)
+        return LitCNNExpand(learning_rate=TrainConfig().learning_rate, weight_decay=TrainConfig().weight_decay, **CNNConfig().__dict__)
     else:
         raise ValueError(f"Unknown architecture type: {architecture_type}")
 
 # architecture_type = "mlp"
 # architecture_type = "cnn"
-# architecture_type = "cnn_rich"
-architecture_type = "cnn_expand"
+architecture_type = "cnn_rich"
+# architecture_type = "cnn_expand"
 
 
-# set if want to load whole datamodule on GPU once (instead of loading batches on GPU one by one)
+# set if want to augment the training data with affine transforms and flips
 # dm_full_gpu = True
-dm_full_gpu = False
+augment = True
 
 def main():
     # init the LightningModule
     lit_module = build_lit_module(architecture_type)
     
     # init the datamodule
-    if dm_full_gpu:
-        dm = FashionMNISTGPUDataModule(batch_size=TrainConfig().batch_size)
+    if augment:
+        dm = FashionMNISTDataModule(batch_size=TrainConfig().batch_size, affine_scale=None)
     else:
-        dm = FashionMNISTDataModule(batch_size=TrainConfig().batch_size)
+        dm = FashionMNISTNoAugment(batch_size=TrainConfig().batch_size)
     
     # setup trainer and fit the model
     checkpoint_callback = ModelCheckpoint(

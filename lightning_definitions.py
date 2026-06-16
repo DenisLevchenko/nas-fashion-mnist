@@ -2,15 +2,45 @@
 LightningModule definitions: model modules, DataModules.
 """
 
+from dataclasses import dataclass, asdict
 import torch
 from torch import nn
-from torch.utils.data import Dataset, DataLoader, TensorDataset, random_split
+from torch.utils.data import Dataset, DataLoader, TensorDataset, random_split, Subset
 from torchvision import datasets
 import torchvision.transforms as T
 import lightning as L
 from torchmetrics.classification import MulticlassAccuracy
 from typing import Tuple, List, Union
 from architectures import MLP, CNN, CNNExpand, CNNRich
+
+# Fashion-MNIST channel statistics (single channel, pre-computed)
+_MEAN = (0.2860,)
+_STD  = (0.3530,)
+
+
+@dataclass
+class MLPConfig:
+    n_hidden: int = 3
+    size_hidden: int = 16
+
+
+@dataclass
+class CNNConfig:
+    out_channels: int = 32
+    n_intermediate: int = 1
+    kernel_size: int = 3
+    padding: str = 'same'
+    dilation: int = 1
+    dropout_rate: float = 0.2
+
+
+@dataclass
+class TrainConfig:
+    lr: float = 4e-3
+    wd: float = 1e-4
+    batch_size: int = 128
+    profiler: str = None # 'simple' or 'advanced' or 'pytorch' or None
+
 
 # define the LightningModule
 class LitMLP(L.LightningModule):
@@ -209,6 +239,7 @@ class LitCNNExpand(L.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         return optimizer
 
+
 def one_hot(y):
     return torch.zeros(10, dtype=torch.float).scatter_(
         0,
@@ -217,7 +248,7 @@ def one_hot(y):
     )
 
 
-class FashionMNISTDataModule(L.LightningDataModule):
+class FashionMNISTNoAugment(L.LightningDataModule):
     def __init__(self, data_dir: str = "~/Coding/torch_tutorial", batch_size: int = 32):
         super().__init__()
         self.data_dir = data_dir
@@ -268,91 +299,160 @@ class FashionMNISTDataModule(L.LightningDataModule):
                           num_workers=8, pin_memory=True, persistent_workers=True)
 
 
-class FashionMNISTGPUDataModule(L.LightningDataModule):
+class FashionMNISTDataModule(L.LightningDataModule):
+    """
+    LightningDataModule for the Fashion-MNIST dataset.
+
+    - Train split : random horizontal flip + random affine + normalization
+    - Val / Test  : normalization only
+    - The official test set is used as the test split.
+      A configurable fraction of the training set is held out as validation.
+
+    Args:
+        data_dir:       Root directory for dataset download / cache.
+        val_fraction:   Fraction of the training set used for validation.
+        batch_size:     Mini-batch size for all dataloaders.
+        num_workers:    Number of workers for DataLoader.
+        pin_memory:     Whether to pin memory (recommended when using a GPU).
+        seed:           Seed for the train/val split RNG. Set to an int for
+                        a fully reproducible split; None gives a random split.
+        flip_p:         Probability of a random horizontal flip.
+        affine_degrees: Rotation range (±degrees) for RandomAffine.
+                        Fashion-MNIST images are 28×28 and orientation carries
+                        class information, so keep this small (default 5°).
+        affine_translate: Max absolute fraction of total width/height for
+                          translation, e.g. (0.1, 0.1).
+        affine_scale:   Scale range for RandomAffine. At 28×28 a ±5% zoom
+                        moves ~1–2 px — subtle but non-trivial. The transform
+                        always outputs the original 28×28 size via crop/pad.
+                        Pass None to disable scaling entirely.
+    """
+
     def __init__(
         self,
-        data_dir="~/Coding/torch_tutorial",
-        batch_size=512,
-        pin_to_gpu=True,
-        device="cuda"
-    ):
+        data_dir: str = "~/Coding/torch_tutorial",
+        val_fraction: float = 0.2,
+        batch_size: int = 64,
+        num_workers: int = 4,
+        pin_memory: bool = True,
+        seed: int | None = 42,
+        # --- augmentation hyper-parameters ---
+        flip_p: float = 0.5,
+        affine_degrees: float = 0,   
+        affine_translate: tuple[float, float] = (0.1, 0.1),
+        affine_scale: tuple[float, float] | None = (0.95, 1.05),  # ±5%; pass None to disable
+    ) -> None:
         super().__init__()
-        self.data_dir = data_dir
-        self.batch_size = batch_size
-        self.pin_to_gpu = pin_to_gpu
-        self.device = device
+        self.save_hyperparameters()
 
-    def prepare_data(self):
-        datasets.FashionMNIST(self.data_dir, train=True, download=True)
-        datasets.FashionMNIST(self.data_dir, train=False, download=True)
+        # Transforms shared by val and test (no augmentation)
+        self._base_transform = T.Compose([
+            T.ToTensor(),
+            T.Normalize(mean=_MEAN, std=_STD),
+        ])
 
-    def setup(self, stage=None):
+        # Transforms for the training split (augmentation + normalization)
+        self._train_transform = T.Compose([
+            T.RandomHorizontalFlip(p=flip_p),
+            T.RandomAffine(
+                degrees=affine_degrees,
+                translate=affine_translate,
+                scale=affine_scale,      # None disables scaling
+            ),
+            T.ToTensor(),
+            T.Normalize(mean=_MEAN, std=_STD),
+        ])
 
-        def load_split(train: bool):
-            ds = datasets.FashionMNIST(
-                root=self.data_dir,
-                train=train,
-                download=False
+        self.train_dataset = None
+        self.val_dataset   = None
+        self.test_dataset  = None
+
+    # ------------------------------------------------------------------
+    # Lifecycle hooks
+    # ------------------------------------------------------------------
+
+    def prepare_data(self) -> None:
+        """Download the dataset (called on a single process in DDP)."""
+        datasets.FashionMNIST(self.hparams.data_dir, train=True,  download=True)
+        datasets.FashionMNIST(self.hparams.data_dir, train=False, download=True)
+
+    def setup(self, stage: str | None = None) -> None:
+        """
+        Instantiate and split datasets.
+        Called on every process in DDP, after prepare_data.
+
+        Stages
+        ------
+        'fit'       -> sets up train + val
+        'validate'  -> sets up val only
+        'test'      -> sets up test only
+        None        -> sets up all three
+        """
+        if stage in ("fit", "validate", None):
+            # Load the full training split twice so each subset gets
+            # its own transform without any data leakage.
+            full_train_aug  = datasets.FashionMNIST(
+                self.hparams.data_dir, train=True, transform=self._train_transform
+            )
+            full_train_base = datasets.FashionMNIST(
+                self.hparams.data_dir, train=True, transform=self._base_transform
             )
 
-            xs = []
-            ys = []
+            n_total = len(full_train_aug)
+            n_val   = int(n_total * self.hparams.val_fraction)
+            n_train = n_total - n_val
 
-            for x, y in ds:
-                xs.append(ToTensor()(x))
-                ys.append(one_hot(y))
+            # Build a seeded generator so the split is reproducible.
+            # seed=None falls back to the global RNG (non-deterministic).
+            generator = None
+            if self.hparams.seed is not None:
+                generator = torch.Generator().manual_seed(self.hparams.seed)
 
-            x = torch.stack(xs)          # [N, 1, 28, 28]
-            y = torch.stack(ys)          # [N, 10]
+            train_indices, val_indices = random_split(
+                range(n_total),
+                [n_train, n_val],
+                generator=generator,
+            )
 
-            return x, y
+            # Apply augmented transform to train, base transform to val
+            self.train_dataset = Subset(full_train_aug,  train_indices.indices)
+            self.val_dataset   = Subset(full_train_base, val_indices.indices)
 
-        # ---- load full datasets into memory ----
-        x_train, y_train = load_split(train=True)
-        x_test, y_test = load_split(train=False)
+        if stage in ("test", None):
+            self.test_dataset = datasets.FashionMNIST(
+                self.hparams.data_dir, train=False, transform=self._base_transform
+            )
 
-        # ---- split train/val ----
-        n = len(x_train)
-        n_train = int(0.8 * n)
-        n_val = n - n_train
+    # ------------------------------------------------------------------
+    # DataLoaders
+    # ------------------------------------------------------------------
 
-        g = torch.Generator().manual_seed(42)
-        perm = torch.randperm(n, generator=g)
-
-        train_idx = perm[:n_train]
-        val_idx = perm[n_train:]
-
-        train_x, train_y = x_train[train_idx], y_train[train_idx]
-        val_x, val_y = x_train[val_idx], y_train[val_idx]
-
-        # ---- optionally move everything to GPU once ----
-        if self.pin_to_gpu:
-            train_x = train_x.to(self.device)
-            train_y = train_y.to(self.device)
-            val_x = val_x.to(self.device)
-            val_y = val_y.to(self.device)
-            x_test = x_test.to(self.device)
-            y_test = y_test.to(self.device)
-
-        self.train_set = TensorDataset(train_x, train_y)
-        self.val_set = TensorDataset(val_x, val_y)
-        self.test_set = TensorDataset(x_test, y_test)
-
-    def train_dataloader(self):
+    def train_dataloader(self) -> DataLoader:
         return DataLoader(
-            self.train_set,
-            batch_size=self.batch_size,
-            shuffle=True
+            self.train_dataset,
+            batch_size=self.hparams.batch_size,
+            shuffle=True,
+            num_workers=self.hparams.num_workers,
+            pin_memory=self.hparams.pin_memory,
+            persistent_workers=self.hparams.num_workers > 0,
         )
 
-    def val_dataloader(self):
+    def val_dataloader(self) -> DataLoader:
         return DataLoader(
-            self.val_set,
-            batch_size=self.batch_size
+            self.val_dataset,
+            batch_size=self.hparams.batch_size,
+            shuffle=False,
+            num_workers=self.hparams.num_workers,
+            pin_memory=self.hparams.pin_memory,
+            persistent_workers=self.hparams.num_workers > 0,
         )
 
-    def test_dataloader(self):
+    def test_dataloader(self) -> DataLoader:
         return DataLoader(
-            self.test_set,
-            batch_size=self.batch_size
+            self.test_dataset,
+            batch_size=self.hparams.batch_size,
+            shuffle=False,
+            num_workers=self.hparams.num_workers,
+            pin_memory=self.hparams.pin_memory,
+            persistent_workers=self.hparams.num_workers > 0,
         )

@@ -6,7 +6,7 @@ import plotly
 import lightning as L
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from dataclasses import dataclass
-from lightning_definitions import FashionMNISTGPUDataModule, LitMLP, LitCNN, LitCNNRich, FashionMNISTDataModule
+from lightning_definitions import FashionMNISTNoAugment, LitMLP, LitCNN, LitCNNRich, FashionMNISTDataModule, LitCNNExpand
 from run_with_lightning import build_lit_module
 
 torch.set_float32_matmul_precision("high")
@@ -27,18 +27,23 @@ class CNNConfig:
 
 @dataclass
 class TrainConfig:
-    lr: float = 1e-2
+    learning_rate: float = 4e-3
+    weight_decay: float = 1e-4
     batch_size: int = 128
 
-dm_full_gpu = False
 # architecture_type = "mlp"
 # architecture_type = "cnn"
 architecture_type = "cnn_rich"
+# architecture_type = "cnn_expand"
 
-if dm_full_gpu:
-    dm = FashionMNISTGPUDataModule(batch_size=TrainConfig().batch_size)
+
+# set if want to augment the training data with affine transforms and flips
+augment = True
+
+if augment:
+    dm = FashionMNISTDataModule(batch_size=TrainConfig().batch_size, affine_scale=None)
 else:
-    dm = FashionMNISTDataModule(batch_size=TrainConfig().batch_size)
+    dm = FashionMNISTNoAugment(batch_size=TrainConfig().batch_size)
 
 
 def objective_mlp(trial):
@@ -84,8 +89,8 @@ def objective_cnn(trial):
         dilation=1,
         dropout_rate=0
     )
-    lr = trial.suggest_float("lr", 1e-4, 1e-1, log=True)
-    lit_module = LitCNN(learning_rate=lr, **config.__dict__)
+    train_config = TrainConfig(learning_rate=trial.suggest_float("lr", 1e-4, 1e-1, log=True),)
+    lit_module = LitCNNExpand(learning_rate=lr, **config.__dict__)
     
     # setup trainer and fit the model
     checkpoint_callback = ModelCheckpoint(
@@ -110,8 +115,23 @@ def objective_cnn(trial):
 
 
 def objective_cnn_rich(trial):
-    config = CNNConfig()
-    lr = trial.suggest_float("lr", 1e-4, 1e-1, log=True)
+    # dropout = trial.suggest_categorical("dropout", [True, False])
+    dropout = True
+    if dropout:
+        dropout_rate = trial.suggest_float("dropout_rate", 0.05, 0.3)
+    else:
+        dropout_rate = 0
+    config = CNNConfig(
+        out_channels=trial.suggest_int("out_channels", 16, 128, log=True),
+        # n_intermediate=trial.suggest_int("n_intermediate", 0, 2),
+        n_intermediate=2,
+        # kernel_size=trial.suggest_int("kernel_size", 3, 7, 2),
+        kernel_size=3,
+        padding='same',
+        dilation=1,
+        dropout_rate=dropout_rate
+    )
+    lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
     wd = trial.suggest_float("weight_decay", 1e-5, 1e-3, log=True)
     lit_module = LitCNNRich(learning_rate=lr, weight_decay=wd, **config.__dict__)
     
@@ -141,15 +161,13 @@ def main():
     # init the datamodule
     # setup optuna study
     optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
-    study_name = f"{architecture_type}_batch128"
+    study_name = f"{architecture_type}_augment"
     storage_name = f"sqlite:///{study_name}.db"
     study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize', load_if_exists=True)
     if architecture_type == "mlp":
         study.optimize(objective_mlp, n_trials=50)
-    elif architecture_type == "cnn":
-        study.optimize(objective_cnn, n_trials=100)
-    elif architecture_type == "cnn_rich":
-        study.optimize(objective_cnn_rich, n_trials=30)
+    else:
+        study.optimize(objective_cnn_rich, n_trials=50)
 
 if __name__ == "__main__":
     main()
