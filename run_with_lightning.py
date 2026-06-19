@@ -22,30 +22,10 @@ from typing import Tuple, List, Union
 from architectures import MLP, CNN
 from dataclasses import dataclass, asdict
 from lightning_definitions import LitMLP, LitCNN, LitCNNRich, LitCNNExpand, FashionMNISTDataModule, FashionMNISTNoAugment
+from config import MLPConfig, CNNConfig, TrainConfig, SetupConfig
+
 
 torch.set_float32_matmul_precision("high")
-
-@dataclass
-class MLPConfig:
-    n_hidden: int = 3
-    size_hidden: int = 16
-
-
-@dataclass
-class CNNConfig:
-    out_channels: int = 51
-    n_intermediate: int = 2
-    kernel_size: int = 3
-    padding: str = 'same'
-    dilation: int = 1
-    dropout_rate: float = 0.21
-
-
-@dataclass
-class TrainConfig:
-    learning_rate: float = 7.71e-4
-    weight_decay: float = 2.14e-4
-    batch_size: int = 128
 
 
 def build_lit_module(architecture_type: str) -> L.LightningModule:
@@ -60,22 +40,26 @@ def build_lit_module(architecture_type: str) -> L.LightningModule:
     else:
         raise ValueError(f"Unknown architecture type: {architecture_type}")
 
-# architecture_type = "mlp"
-# architecture_type = "cnn"
-architecture_type = "cnn_rich"
-# architecture_type = "cnn_expand"
 
+def load_lit_from_checkpoint(architecture_type: str, model_path: str):
+    if architecture_type == "mlp":
+        return LitMLP.load_from_checkpoint(model_path)
+    elif architecture_type == "cnn":
+        return LitCNN.load_from_checkpoint(model_path)
+    elif architecture_type == "cnn_rich":
+        return LitCNNRich.load_from_checkpoint(model_path)
+    elif architecture_type == "cnn_expand":
+        return LitCNNExpand.load_from_checkpoint(model_path)
+    else:
+        raise ValueError(f"Unknown architecture type: {architecture_type}")
 
-# set if want to augment the training data with affine transforms and flips
-# dm_full_gpu = True
-augment = True
 
 def main():
     # init the LightningModule
-    lit_module = build_lit_module(architecture_type)
+    lit_module = build_lit_module(SetupConfig().architecture_type)
     
     # init the datamodule
-    if augment:
+    if SetupConfig.augment:
         dm = FashionMNISTDataModule(batch_size=TrainConfig().batch_size, affine_scale=None)
     else:
         dm = FashionMNISTNoAugment(batch_size=TrainConfig().batch_size)
@@ -101,16 +85,7 @@ def main():
     
     # Load and test the best model from checkpoint
     best_model_path = checkpoint_callback.best_model_path
-    if architecture_type == "mlp":
-        best_model = LitMLP.load_from_checkpoint(best_model_path)
-    elif architecture_type == "cnn":
-        best_model = LitCNN.load_from_checkpoint(best_model_path)
-    elif architecture_type == "cnn_rich":
-        best_model = LitCNNRich.load_from_checkpoint(best_model_path)
-    elif architecture_type == "cnn_expand":
-        best_model = LitCNNExpand.load_from_checkpoint(best_model_path)
-    else:
-        raise ValueError(f"Unknown architecture type: {architecture_type}")
+    best_model = load_lit_from_checkpoint(SetupConfig.architecture_type, best_model_path)
     trainer.test(best_model, datamodule=dm)
     print(f"Model hparams: {best_model.hparams}")
 

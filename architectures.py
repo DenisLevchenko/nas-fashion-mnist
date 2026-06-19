@@ -10,29 +10,7 @@ from typing import Tuple, List, Union
 from dataclasses import dataclass
 import lightning as L
 from torchmetrics.classification import MulticlassAccuracy
-
-@dataclass
-class MLPConfig:
-    n_hidden: int = 3
-    size_hidden: int = 16
-
-
-@dataclass
-class CNNConfig:
-    out_channels: int = 32
-    n_intermediate: int = 1
-    kernel_size: int = 3
-    padding: str = 'same'
-    dilation: int = 1
-    dropout_rate: float = 0.2
-
-
-@dataclass
-class TrainConfig:
-    lr: float = 4e-3
-    wd: float = 1e-4
-    batch_size: int = 128
-    profiler: str = None # 'simple' or 'advanced' or 'pytorch' or None
+from config import MLPConfig, CNNConfig, TrainConfig, SetupConfig
 
 
 class MLPBasic(nn.Module):
