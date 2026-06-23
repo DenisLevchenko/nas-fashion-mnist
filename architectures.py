@@ -10,7 +10,6 @@ from typing import Tuple, List, Union
 from dataclasses import dataclass
 import lightning as L
 from torchmetrics.classification import MulticlassAccuracy
-from config import MLPConfig, CNNConfig, TrainConfig, SetupConfig
 
 
 class MLPBasic(nn.Module):

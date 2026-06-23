@@ -1,29 +1,40 @@
-from dataclasses import dataclass, asdict
-
-@dataclass
-class MLPConfig:
-    n_hidden: int = 3
-    size_hidden: int = 16
 
 
-@dataclass
-class CNNConfig:
-    out_channels: int = 51
-    n_intermediate: int = 2
-    kernel_size: int = 3
-    padding: str = 'same'
-    dilation: int = 1
-    dropout_rate: float = 0.21
+mlp_config = {
+    'n_hidden': 3,
+    'size_hidden': 16
+}
 
+cnn_config = {
+    'out_channels' : 32,
+    'n_intermediate' : 1,
+    'kernel_size' : 3,
+    'padding' : 'same',
+    'dilation' : 1,
+    'dropout_rate' : 0.15
+}
 
-@dataclass
-class TrainConfig:
-    learning_rate: float = 7.71e-4
-    weight_decay: float = 2.14e-4
-    batch_size: int = 128
+optimizer_config = {
+    'lr' : 7.71e-3,
+    'weight_decay' : 2.14e-4
+}
 
+data_config = {
+    'batch_size' : 128,
+    'augment' : True
+}
 
-@dataclass
-class SetupConfig:
-    architecture_type: str = 'cnn_rich' # mlp_basic, mlp, cnn_basic, cnn, cnn_rich, cnn_expand
-    augment: bool = True
+checkpoint_config = {
+    'monitor' : 'val_accuracy',
+    'save_top_k' : 1, # save only the best model
+    'mode' : 'max', # max for maximizing, min for minimizaing
+    'verbose' : False
+}
+
+early_stop_config = {
+    'monitor' : "val_accuracy",
+    'min_delta' : 0.00,
+    'patience' : 10,
+    'mode' : "max",
+    'verbose' : False
+}

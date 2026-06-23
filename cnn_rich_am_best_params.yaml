@@ -1,0 +1,11 @@
+architecture_type: cnn_rich
+net_params:
+  dropout_rate: 0.17137902699918633
+  out_channels: 31
+  dilation: 1
+  kernel_size: 3
+  n_intermediate: 1
+  padding: same
+optimizer_params:
+  lr: 0.0012626216773212954
+  weight_decay: 6.0618981477913266e-05
