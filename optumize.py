@@ -73,7 +73,12 @@ def objective_cnn(trial):
     lit_module = LitModule(architecture_type=architecture_type, net_params=cnn_config, optimizer_params=optimizer_config)
     
     # setup trainer and fit the model
-    checkpoint_callback = ModelCheckpoint(**checkpoint_config)
+    checkpoint_callback = ModelCheckpoint(
+        monitor='val_accuracy',
+        save_top_k=0, # don't save the weights for each trial
+        mode='max',
+        verbose=False
+    )
     early_stop_callback = EarlyStopping(**early_stop_config)
     trainer = L.Trainer(callbacks=[checkpoint_callback, early_stop_callback], max_epochs=100)
     trainer.fit(lit_module, datamodule=dm)
