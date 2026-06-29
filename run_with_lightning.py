@@ -14,23 +14,27 @@ import torch
 import lightning as L
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning_definitions import LitModule, FashionMNISTDataModule, FashionMNISTNoAugment
-from config import *
 
 
-# haparams_file_name = 'cnn_rich_am_best_params.yaml'
-# hparams_path = Path(haparams_file_name)
+full_config_file_name = 'config.yaml'
+full_config_path = Path(full_config_file_name)
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-l", "--load", action="store_true",
-                        help="Load saved model")
     parser.add_argument("--model", type=str,
                         help="Path to checkpoint to load")
     parser.add_argument("--config", type=str,
+                        default=full_config_file_name,
                         help="Path to configuration file")
     
     args = parser.parse_args()
     torch.set_float32_matmul_precision("high")
-
+    
+    with open(full_config_path, 'r') as file:
+        full_config = yaml.safe_load(file)
+    data_config = full_config['data_config']
+    callbacks_config = full_config['callbacks_config']
+    # lit_module_config = full_config['lit_module_config']
     # init the datamodule
     if data_config['augment']:
         dm = FashionMNISTDataModule(batch_size=data_config['batch_size'], affine_scale=None)
@@ -38,12 +42,12 @@ def main():
         dm = FashionMNISTNoAugment(batch_size=data_config['batch_size'])
     
    
-    checkpoint_callback = ModelCheckpoint(**checkpoint_config)
-    early_stop_callback = EarlyStopping(**early_stop_config)
+    checkpoint_callback = ModelCheckpoint(**callbacks_config['checkpoint_config'])
+    early_stop_callback = EarlyStopping(**callbacks_config['early_stopping_config'])
     trainer = L.Trainer(callbacks=[checkpoint_callback, early_stop_callback], max_epochs=100)
     
     # init the LightningModule
-    if args.load:
+    if args.model is not None:
         model_file_name = args.model
         model_path = Path(model_file_name)
         lit_module =LitModule.load_from_checkpoint(model_path)
@@ -55,7 +59,8 @@ def main():
         config_path = Path(config_file_name)
         with open(config_path, 'r') as file:
             full_config = yaml.safe_load(file)
-        lit_module = LitModule(**full_config)
+        lit_module_config = full_config['lit_module_config']
+        lit_module = LitModule(**lit_module_config)
         print(lit_module)
         trainer.fit(lit_module, datamodule=dm)
         # Load and test the best model from checkpoint

@@ -1,0 +1,27 @@
+lit_module_config:
+  architecture_type: cnn_rich
+  net_params:
+    out_channels: 32
+    n_intermediate: 1
+    kernel_size: 3
+    padding: same
+    dilation: 1
+    dropout_rate: 0.15
+  optimizer_params:
+    lr: 0.00771
+    weight_decay: 0.000214
+data_config:
+  batch_size: 128
+  augment: true
+callbacks_config:
+  checkpoint_config:
+    monitor: val_accuracy
+    save_top_k: 1
+    mode: max
+    verbose: false
+  early_stopping_config:
+    monitor: val_accuracy
+    min_delta: 0.0
+    patience: 10
+    mode: max
+    verbose: false

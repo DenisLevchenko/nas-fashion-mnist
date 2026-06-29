@@ -1,4 +1,6 @@
+import yaml
 
+architecture_type = 'cnn_rich'
 
 mlp_config = {
     'n_hidden': 3,
@@ -13,6 +15,8 @@ cnn_config = {
     'dilation' : 1,
     'dropout_rate' : 0.15
 }
+
+net_params = mlp_config if architecture_type=='mlp' else cnn_config
 
 optimizer_config = {
     'lr' : 7.71e-3,
@@ -31,10 +35,30 @@ checkpoint_config = {
     'verbose' : False
 }
 
-early_stop_config = {
+early_stopping_config = {
     'monitor' : "val_accuracy",
     'min_delta' : 0.00,
     'patience' : 10,
     'mode' : "max",
     'verbose' : False
 }
+
+
+callbacks_config = {
+    'checkpoint_config' : checkpoint_config,
+    'early_stopping_config' : early_stopping_config
+}
+
+lit_module_config = {
+    'architecture_type': architecture_type,
+    'net_params': net_params,
+    'optimizer_params': optimizer_config
+}
+
+full_config = {'lit_module_config' : lit_module_config,
+               'data_config': data_config,
+               'callbacks_config': callbacks_config
+               }
+
+with open("config.yaml", "w") as f:
+    yaml.safe_dump(full_config, f, sort_keys=False)
