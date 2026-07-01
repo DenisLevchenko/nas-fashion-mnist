@@ -5,8 +5,8 @@ import logging
 import yaml
 import lightning as L
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
+from optuna.integration import PyTorchLightningPruningCallback
 from lightning_definitions import FashionMNISTNoAugment, FashionMNISTDataModule, LitModule
-from functools import partial
 
 
 architecture_type = "mlp"
@@ -22,30 +22,27 @@ optimizer_keys = ["lr", "weight_decay"]
 
 def objective_mlp(trial):
     
-    n_hidden = trial.suggest_int("n_hidden", 1, 5)
-    size_hidden = trial.suggest_int("size_hidden", 8, 256, log=True)
+    n_hidden = trial.suggest_int("n_hidden", 2, 4)
+    size_hidden = trial.suggest_int("size_hidden", 64, 512, log=True)
     mlp_config = {
         'n_hidden': n_hidden,
         'size_hidden': size_hidden
     }
     
-    lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
-    weight_decay = trial.suggest_float("weight_decay", 1e-5, 1e-3, log=True)
+    # lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
+    trial.set_user_attr("lr", 1e-3)
+    # weight_decay = trial.suggest_float("weight_decay", 1e-5, 1e-3, log=True)
+    trial.set_user_attr("weight_decay", 1e-5)
     optimizer_config ={
-        'lr' : lr,
-        'weight_decay' : weight_decay
+        'lr' : trial.user_attrs['lr'],
+        'weight_decay' : trial.user_attrs['weight_decay']
     }
     
     lit_module = LitModule(architecture_type=architecture_type, net_params=mlp_config, optimizer_params=optimizer_config)
 
     # setup trainer and fit the model
-    checkpoint_config = {
-        'monitor' : 'val_accuracy',
-        'save_top_k' : 0, # don't save the weights for each trial
-        'mode' : 'max', # max for maximizing, min for minimizaing
-        'verbose' : False
-    }
-
+    # pruning callback allows using Optuna pruners as a lightning callback
+    pruning_callback = PyTorchLightningPruningCallback(trial, monitor='val_accuracy')
     early_stopping_config = {
         'monitor' : "val_accuracy",
         'min_delta' : 0.00,
@@ -53,9 +50,8 @@ def objective_mlp(trial):
         'mode' : "max",
         'verbose' : False
     }
-    checkpoint_callback = ModelCheckpoint(**checkpoint_config)
     early_stop_callback = EarlyStopping(**early_stopping_config)
-    trainer = L.Trainer(callbacks=[checkpoint_callback, early_stop_callback], max_epochs=50)
+    trainer = L.Trainer(callbacks=[pruning_callback, early_stop_callback], max_epochs=50)
     # init the datamodule. We don't use augmentation for MLP
     dm = FashionMNISTNoAugment(batch_size=128)
     trainer.fit(lit_module, datamodule=dm)
@@ -116,9 +112,15 @@ def main():
     # setup optuna study
     optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
     database_dir = "optuna_databases"
-    study_name = f"{architecture_type}"
+    study_name = f"{architecture_type}3"
     storage_name = f"sqlite:///{database_dir}/{study_name}.db"
-    study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize', load_if_exists=False)
+    # use Optuna median pruner. Can also use Hyperband, etc...
+    pruner = optuna.pruners.MedianPruner(
+        n_startup_trials=5, n_warmup_steps=10,
+        interval_steps=1, n_min_trials=2
+    )
+    study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize',
+                                pruner=pruner, load_if_exists=False)
     if architecture_type == "mlp":
         study.optimize(objective_mlp, n_trials=100)
     else:

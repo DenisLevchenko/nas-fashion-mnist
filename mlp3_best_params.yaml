@@ -1,0 +1,8 @@
+lit_module_config:
+  architecture_type: mlp
+  net_params:
+    n_hidden: 3
+    size_hidden: 412
+  optimizer_params:
+    lr: 0.001
+    weight_decay: 1.0e-05

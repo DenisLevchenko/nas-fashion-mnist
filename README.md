@@ -1,8 +1,13 @@
-# Neural net architecture optimization on Fashion MNIST
+# Neural net architecture optimization on Fashion-MNIST
 Using `Optuna`, `PyTorch`, and `Lightning`.
 Monitoring on `Tensorboard`.
 
-
+Recreate python environment:
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 ## Project Structure
 ### `architectures.py`
 defines the broad neural net `PyTorch` architectures:  
@@ -18,6 +23,7 @@ The `FashionMNISTDataModule` handles all the standard procedures for downloading
 
 ### `optumize.py`
 does the hyperparameter optimization of the `LitModule` on the `FashionMNISTDataModulee` using `Optuna`, saving results in a `.db` file that can be explored and visualized later to understand the importance and best values for the hyperparameters, whether another optimization is needed, etc. It saves the best hyperparameters found in a `.yaml` file.
+By default uses Optuna's TPE (tree Parzen estimators) sampler and median pruner to efficiently explore the hyperparameter space.
 
 ### `test_best_model.py`
 will attempt to load the best model weights saved in a `.pth` file into a `LitModule` and test it on the test data not seen during training and optimization.  
