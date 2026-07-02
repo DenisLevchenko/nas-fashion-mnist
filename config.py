@@ -25,7 +25,8 @@ optimizer_config = {
 
 data_config = {
     'batch_size' : 128,
-    'augment' : True
+    'augment' : True,
+    'affine_scale' : None
 }
 
 checkpoint_config = {

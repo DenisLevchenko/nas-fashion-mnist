@@ -11,7 +11,7 @@ import torchvision.transforms as T
 import lightning as L
 from torchmetrics.classification import MulticlassAccuracy
 from typing import Tuple, List, Union
-from architectures import MLP, CNN, CNNBasic, CNNExpand, CNNRich
+from architectures import MLPBasic, MLP, CNN, CNNBasic, CNNExpand, CNNRich, CNN2
 
 
 # Fashion-MNIST channel statistics (single channel, pre-computed)
@@ -20,10 +20,12 @@ _STD  = (0.3530,)
 
 
 architectures = {
+    "mlp_basic": MLPBasic,
     "mlp": MLP,
     "cnn_basic": CNNBasic,
     "cnn_rich": CNNRich,
     "cnn_expand": CNNExpand,
+    "cnn2": CNN2
 }
 
 
@@ -85,7 +87,7 @@ def one_hot(y):
 
 
 class FashionMNISTNoAugment(L.LightningDataModule):
-    def __init__(self, data_dir: str = "~/Coding/torch_tutorial", batch_size: int = 32):
+    def __init__(self, data_dir: str = "~/Coding/torch_tutorial", batch_size: int = 128):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
@@ -168,7 +170,7 @@ class FashionMNISTDataModule(L.LightningDataModule):
         self,
         data_dir: str = "~/Coding/torch_tutorial",
         val_fraction: float = 0.2,
-        batch_size: int = 64,
+        batch_size: int = 128,
         num_workers: int = 4,
         pin_memory: bool = True,
         seed: int | None = 42,

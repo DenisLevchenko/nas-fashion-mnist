@@ -1,0 +1,6 @@
+lit_module_config:
+  architecture_type: mlp_basic
+  net_params: {}
+  optimizer_params:
+    lr: 0.01
+    weight_decay: 0.0001

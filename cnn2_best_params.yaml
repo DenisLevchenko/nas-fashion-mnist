@@ -1,0 +1,12 @@
+lit_module_config:
+  architecture_type: cnn2
+  net_params:
+    dropout_rate: 0.19288385700893612
+    out_channels: 64
+    n_intermediate: 1
+    dilation: 1
+    kernel_size: 3
+    padding: same
+  optimizer_params:
+    lr: 0.0002491521389848629
+    weight_decay: 4.166799052610572e-05

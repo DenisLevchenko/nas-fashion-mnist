@@ -5,14 +5,15 @@ import logging
 import yaml
 import lightning as L
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
-from optuna.integration import PyTorchLightningPruningCallback
+from optuna_integration.pytorch_lightning import PyTorchLightningPruningCallback
 from lightning_definitions import FashionMNISTNoAugment, FashionMNISTDataModule, LitModule
 
 
-architecture_type = "mlp"
+# architecture_type = "mlp"
 # architecture_type = "cnn"
 # architecture_type = "cnn_rich"
 # architecture_type = "cnn_expand"
+architecture_type = "cnn2"
 
 # set if want to augment the training data with affine transforms and flips
 optimizer_keys = ["lr", "weight_decay"]
@@ -71,10 +72,11 @@ def objective_cnn(trial):
     trial.set_user_attr("kernel_size", 3)
     trial.set_user_attr("dilation", 1)
     trial.set_user_attr("padding", "same")
-    trial.set_user_attr("n_intermediate", 1)
+    # trial.set_user_attr("n_intermediate", 1)
     cnn_config = {
-    'out_channels' : trial.suggest_int("out_channels", 16, 32, log=True),
-    'n_intermediate' : trial.user_attrs["n_intermediate"],
+    'out_channels' : trial.suggest_int("out_channels", 64, 256, log=True),
+    # 'n_intermediate' : trial.user_attrs["n_intermediate"],
+    'n_intermediate' : trial.suggest_int("n_intermediate", 1, 3),
     'kernel_size' : trial.user_attrs["kernel_size"],
     'padding' : trial.user_attrs["padding"],
     'dilation' : trial.user_attrs["dilation"],
@@ -90,20 +92,22 @@ def objective_cnn(trial):
 
     lit_module = LitModule(architecture_type=architecture_type, net_params=cnn_config, optimizer_params=optimizer_config)
     
-    # setup trainer and fit the model
-    checkpoint_callback = ModelCheckpoint(
-        monitor='val_accuracy',
-        save_top_k=0, # don't save the weights for each trial
-        mode='max',
-        verbose=False
-    )
-    early_stop_callback = EarlyStopping(**early_stop_config)
-    trainer = L.Trainer(callbacks=[checkpoint_callback, early_stop_callback], max_epochs=100)
-    # init the datamodule. For CNNs, we use data augmentation
+    # pruning callback allows using Optuna pruners as a lightning callback
+    pruning_callback = PyTorchLightningPruningCallback(trial, monitor='val_accuracy')
+    early_stopping_config = {
+        'monitor' : "val_accuracy",
+        'min_delta' : 0.00,
+        'patience' : 10,
+        'mode' : "max",
+        'verbose' : False
+    }
+    early_stop_callback = EarlyStopping(**early_stopping_config)
+    trainer = L.Trainer(callbacks=[pruning_callback, early_stop_callback], max_epochs=50)
+    # init the datamodule. Augment the data for CNNs
     dm = FashionMNISTDataModule(batch_size=128, affine_scale=None)
     trainer.fit(lit_module, datamodule=dm)
     
-    best_val_accuracy = checkpoint_callback.best_model_score.item()
+    best_val_accuracy = early_stop_callback.best_score.item()
     return best_val_accuracy
 
 
@@ -112,11 +116,11 @@ def main():
     # setup optuna study
     optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
     database_dir = "optuna_databases"
-    study_name = f"{architecture_type}3"
+    study_name = f"{architecture_type}"
     storage_name = f"sqlite:///{database_dir}/{study_name}.db"
     # use Optuna median pruner. Can also use Hyperband, etc...
     pruner = optuna.pruners.MedianPruner(
-        n_startup_trials=5, n_warmup_steps=10,
+        n_startup_trials=10, n_warmup_steps=10,
         interval_steps=1, n_min_trials=2
     )
     study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize',
@@ -124,7 +128,7 @@ def main():
     if architecture_type == "mlp":
         study.optimize(objective_mlp, n_trials=100)
     else:
-        study.optimize(objective_cnn, n_trials=5)
+        study.optimize(objective_cnn, n_trials=100)
     variable_params = study.best_params.copy()
     set_params = study.best_trial.user_attrs.copy()
     all_params = variable_params | set_params
