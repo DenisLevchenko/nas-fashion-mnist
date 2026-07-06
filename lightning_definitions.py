@@ -11,7 +11,7 @@ import torchvision.transforms as T
 import lightning as L
 from torchmetrics.classification import MulticlassAccuracy
 from typing import Tuple, List, Union
-from architectures import MLPBasic, MLP, CNN, CNNBasic, CNNExpand, CNNRich, CNN2
+from architectures import CNNBatchNorm, MLPBasic, MLP, CNN, CNNBasic, CNNExpand, CNNRich, CNN2
 
 
 # Fashion-MNIST channel statistics (single channel, pre-computed)
@@ -25,7 +25,8 @@ architectures = {
     "cnn_basic": CNNBasic,
     "cnn_rich": CNNRich,
     "cnn_expand": CNNExpand,
-    "cnn2": CNN2
+    "cnn2": CNN2,
+    "cnn_batch": CNNBatchNorm
 }
 
 
@@ -178,7 +179,7 @@ class FashionMNISTDataModule(L.LightningDataModule):
         flip_p: float = 0.5,
         affine_degrees: float = 0,   
         affine_translate: tuple[float, float] = (0.1, 0.1),
-        affine_scale: tuple[float, float] | None = (0.95, 1.05),  # ±5%; pass None to disable
+        affine_scale: tuple[float, float] | None = None,  # pass (0.95, 1.05) for ±5% zoom, None disables scaling
     ) -> None:
         super().__init__()
         self.save_hyperparameters()

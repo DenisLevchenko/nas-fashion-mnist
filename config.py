@@ -1,6 +1,6 @@
 import yaml
 
-architecture_type = 'cnn_rich'
+architecture_type = 'cnn_batch'
 
 mlp_config = {
     'n_hidden': 3,
@@ -8,7 +8,7 @@ mlp_config = {
 }
 
 cnn_config = {
-    'out_channels' : 32,
+    'out_channels' : 64,
     'n_intermediate' : 1,
     'kernel_size' : 3,
     'padding' : 'same',
@@ -25,8 +25,7 @@ optimizer_config = {
 
 data_config = {
     'batch_size' : 128,
-    'augment' : True,
-    'affine_scale' : None
+    'augment' : True
 }
 
 checkpoint_config = {

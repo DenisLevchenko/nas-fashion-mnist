@@ -153,6 +153,62 @@ class CNN(nn.Module):
         return logits
 
 
+class CNNBatchNorm(nn.Module):
+    """Basic 2D CNN network with batch normalization.
+    
+    Args:
+        out_channels:
+            how many output channels/ conv filters
+        kernel_size:
+            kernel size for convolution
+        padding:
+            padding for the convolution operation:
+            'same' or 'valid' or int or Tuple[int, int]
+        dilation:
+            dilation for the convolution operation
+        dropout_rate:
+            if nonzero, dropout rate for the final dense layer
+    """
+    
+    def __init__(self, out_channels: int = 8, n_intermediate: int = 1,
+                 kernel_size: Union[int, Tuple[int, int]] = 3,
+                 padding: Union[int, Tuple[int, int], str] = 'same',
+                 stride: int = 1,
+                 dilation: Union[int, Tuple[int, int]] = 1,
+                 dropout_rate: float = 0):
+        super().__init__()
+        self.out_channels = out_channels
+        self.dropout_rate = dropout_rate
+        def conv(in_channels, out_channels):
+            return nn.Conv2d(in_channels=in_channels,
+                             out_channels=out_channels, bias=False,
+                             kernel_size=kernel_size, padding=padding)
+        def batch_norm():
+            return nn.BatchNorm2d(out_channels)
+        max_pool = nn.MaxPool2d(2)
+
+        conv_stack1 = nn.Sequential(conv(1, self.out_channels), batch_norm(), nn.ReLU(), max_pool)
+        conv_stack2 = nn.Sequential(conv(self.out_channels, self.out_channels), batch_norm(), nn.ReLU(), max_pool)
+        conv_stack3 = nn.Sequential(conv(self.out_channels, self.out_channels), batch_norm(), nn.ReLU(), nn.AdaptiveAvgPool2d(1))
+        self.conv_net = nn.Sequential()
+        self.conv_net.append(conv_stack1)
+        for i in range(n_intermediate):
+            self.conv_net.append(conv_stack2)
+        self.conv_net.append(conv_stack3)
+        self.flatten = nn.Flatten()
+        if dropout_rate > 0:
+            self.dropout = nn.Dropout(p=dropout_rate)
+        self.dense = nn.Linear(self.out_channels * 1 * 1, 10)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        output = self.conv_net(x)
+        output = self.flatten(output)
+        if self.dropout_rate > 0:
+            output = self.dropout(output)
+        logits = self.dense(output)
+        return logits
+
+
 class CNNRich(nn.Module):
     """Basic 2D CNN network with configurable parameters and batch normalization.
     

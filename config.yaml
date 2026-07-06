@@ -1,8 +1,8 @@
 lit_module_config:
-  architecture_type: cnn2
+  architecture_type: cnn_batch
   net_params:
-    out_channels: 128
-    n_intermediate: 2
+    out_channels: 64
+    n_intermediate: 1
     kernel_size: 3
     padding: same
     dilation: 1
@@ -13,7 +13,6 @@ lit_module_config:
 data_config:
   batch_size: 128
   augment: true
-  affine_scale: null
 callbacks_config:
   checkpoint_config:
     monitor: val_accuracy
