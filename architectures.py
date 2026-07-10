@@ -1,15 +1,12 @@
 """
-Neural architecture class definitions.
+PyTorch Neural architecture class definitions.
 
-Used by the main train.py and run_with_lightning.py.
+Used by the main LitModule in lightning_definitions.py.
 """
 
 import torch
 from torch import nn
 from typing import Tuple, List, Union
-from dataclasses import dataclass
-import lightning as L
-from torchmetrics.classification import MulticlassAccuracy
 
 
 class MLPBasic(nn.Module):
@@ -58,6 +55,7 @@ class MLP(nn.Module):
         logits = self.linear_relu_stack(x)
         return logits
 
+# TODO: fix repeated use of conv2 etc. need to create from functions
 
 class CNNBasic(nn.Module):
     """Basic 2D CNN network with three convolutional layers.

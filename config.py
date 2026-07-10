@@ -1,6 +1,17 @@
+"""
+Basic script for creating a .yaml config file.
+
+Easy to edit and add parameters.
+The resulting .yaml config file can be used by train_and_test_from_yaml from run_with_lightning.py
+or directly by run_with_lightning.py
+"""
+
 import yaml
 
-architecture_type = 'cnn_batch'
+config_dir = 'configs' # directory to put the config file into
+config_file_name = 'test_config' # name of the .yaml file created
+
+architecture_type = 'cnn_batch' # see architectures.py for a list of supported architectures
 
 mlp_config = {
     'n_hidden': 3,
@@ -43,7 +54,6 @@ early_stopping_config = {
     'verbose' : False
 }
 
-
 callbacks_config = {
     'checkpoint_config' : checkpoint_config,
     'early_stopping_config' : early_stopping_config
@@ -58,7 +68,29 @@ lit_module_config = {
 full_config = {'lit_module_config' : lit_module_config,
                'data_config': data_config,
                'callbacks_config': callbacks_config
-               }
+}
 
-with open("config.yaml", "w") as f:
+def save_trial_config_from_study(study, architecture_type: str, trial_number: int | None = None):
+    optimizer_keys = ['lr', 'weight_decay'] # for correctly separating optimizer params from the rest
+    config_dir = 'configs'
+    if trial_number is not None:
+        trial = study.trials[trial_number]
+        config_name = f'{study.study_name}_trial{trial_number}_config'
+    else:
+        trial = study.best_trial
+        config_name = f'{study.study_name}_best_params'
+    variable_params = trial.params.copy()
+    set_params = trial.user_attrs.copy()
+    all_params = variable_params | set_params
+    optimizer_params = {k: all_params[k] for k in optimizer_keys}
+    net_params = {k: all_params[k] for k in all_params if k not in optimizer_keys}
+    lit_module_config = {'architecture_type': architecture_type,
+                         'net_params': net_params,
+                         'optimizer_params': optimizer_params}
+    full_config = {'lit_module_config': lit_module_config}
+    with open(f'{config_dir}/{config_name}.yaml', 'w') as f:
+        yaml.safe_dump(full_config, f, sort_keys=False)
+
+
+with open(f'{config_dir}/{config_file_name}.yaml', 'w') as f:
     yaml.safe_dump(full_config, f, sort_keys=False)

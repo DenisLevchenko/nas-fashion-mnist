@@ -1,5 +1,4 @@
 import argparse
-
 import optuna
 import torch
 import sys
@@ -110,7 +109,7 @@ def objective_cnn(trial):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--architecture", type=str, default="mlp",
-                        help="Architecture type: mlp, cnn, cnn_rich, cnn_expand")
+                        help="Architecture type: mlp, cnn, cnn_rich, cnn_expand, cnn2")
     parser.add_argument("--n_trials", type=int, default=100,
                         help="Number of trials for optuna")
     parser.add_argument("--study_name", type=str, default="optuna_study",
