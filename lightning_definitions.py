@@ -1,5 +1,5 @@
 """
-LightningModule definitions: model modules, DataModules.
+LightningModule definitions: model module, DataModules.
 """
 
 from dataclasses import dataclass, asdict
@@ -11,26 +11,33 @@ import torchvision.transforms as T
 import lightning as L
 from torchmetrics.classification import MulticlassAccuracy
 from typing import Tuple, List, Union
-from architectures import CNNBatchNorm, MLPBasic, MLP, CNN, CNNBasic, CNNExpand, CNNRich, CNN2
+from architectures import MLPBasic, MLP, CNNBasic, CNN, CNNBatchNorm, CNN2
 
 
 # Fashion-MNIST channel statistics (single channel, pre-computed)
 _MEAN = (0.2860,)
 _STD  = (0.3530,)
 
-
+# matches architecture type name to the appropriate PyTorch class
 architectures = {
     "mlp_basic": MLPBasic,
     "mlp": MLP,
     "cnn_basic": CNNBasic,
-    "cnn_rich": CNNRich,
-    "cnn_expand": CNNExpand,
     "cnn2": CNN2,
     "cnn_batch": CNNBatchNorm
 }
 
 
 class LitModule(L.LightningModule):
+    """
+    Main LightningModule used for training, validating, and testing.
+
+    Args:
+        architecture_type (str): Which neural architecture type to use.
+        net_params (dict): Hyperpemarameters for the neural net.
+        optimizer_params (dict): Optimizer params: learning rate and weight decay.
+    """
+
     def __init__(self, architecture_type: str,
                  net_params: dict, optimizer_params: dict
                  ):
@@ -38,8 +45,6 @@ class LitModule(L.LightningModule):
         self.save_hyperparameters()
         architecture_class = architectures[architecture_type]
         self.net = architecture_class(**net_params)
-        # self.learning_rate = learning_rate
-        # self.weight_decay = weight_decay
         self.loss = nn.CrossEntropyLoss()
         self.accuracy = MulticlassAccuracy(num_classes=10)
         
@@ -80,6 +85,10 @@ class LitModule(L.LightningModule):
 
 
 def one_hot(y):
+    """
+    One-hot encoding for the target.
+    Can be used for a different loss or accuracy functions.
+    """
     return torch.zeros(10, dtype=torch.float).scatter_(
         0,
         torch.tensor(y),
@@ -88,6 +97,17 @@ def one_hot(y):
 
 
 class FashionMNISTNoAugment(L.LightningDataModule):
+    """
+    LightningDataModule for the Fashion-MNIST dataset without doing augmentations.
+
+    Applies normilization to train, val, and test splits.
+    The official test set is used as the test split.
+
+    Args:
+        data_dir:       Root directory for dataset download / cache.
+        batch_size:     Mini-batch size for all dataloaders.
+    """
+   
     def __init__(self, data_dir: str = "~/Coding/torch_tutorial", batch_size: int = 128):
         super().__init__()
         self.data_dir = data_dir
@@ -140,7 +160,7 @@ class FashionMNISTNoAugment(L.LightningDataModule):
 
 class FashionMNISTDataModule(L.LightningDataModule):
     """
-    LightningDataModule for the Fashion-MNIST dataset.
+    LightningDataModule for the Fashion-MNIST dataset with augmentations.
 
     - Train split : random horizontal flip + random affine + normalization
     - Val / Test  : normalization only

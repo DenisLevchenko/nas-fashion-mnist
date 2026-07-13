@@ -34,9 +34,9 @@ class MLP(nn.Module):
     
     All hidden layers have the same size.
     Args:
-        n_hidden:
+        n_hidden (int):
             number of hidden layers
-        size_hidden:
+        size_hidden (int):
             size of the hidden layers
     """
     def __init__(self, n_hidden: int, size_hidden: int):
@@ -55,24 +55,9 @@ class MLP(nn.Module):
         logits = self.linear_relu_stack(x)
         return logits
 
-# TODO: fix repeated use of conv2 etc. need to create from functions
 
 class CNNBasic(nn.Module):
-    """Basic 2D CNN network with three convolutional layers.
-    
-    Args:
-        out_channels:
-            how many output channels/ conv filters
-        kernel_size:
-            kernel size for convolution and pooling
-        padding:
-            padding for the convolution operation:
-            'same' or 'valid' or int or Tuple[int, int]
-        dilation:
-            dilation for the convolution operation
-        dropout_rate:
-            if nonzero, dropout rate for the final dense layer
-    """
+    """Basic 2D CNN network with three fixed convolutional layers."""
     
     def __init__(self):
         super().__init__()
@@ -101,9 +86,9 @@ class CNN(nn.Module):
     """Basic 2D CNN network with configurable parameters.
     
     Args:
-        out_channels:
+        out_channels (int):
             how many output channels/ conv filters
-        kernel_size:
+        kernel_size (int):
             kernel size for convolution
         padding:
             padding for the convolution operation:
@@ -111,7 +96,8 @@ class CNN(nn.Module):
         dilation:
             dilation for the convolution operation
         dropout_rate:
-            if nonzero, dropout rate for the final dense layer
+            if nonzero, dropout rate for the final dense layer.
+            if zero, dropout is not applied.
     """
     
     def __init__(self, out_channels: int = 8, n_intermediate: int = 1,
@@ -125,17 +111,19 @@ class CNN(nn.Module):
         self.dropout_rate = dropout_rate
         conv1 = nn.Conv2d(in_channels=1, out_channels=self.out_channels,
                           kernel_size=kernel_size, padding=padding)
-        max_pool = nn.MaxPool2d(2)
-        conv2 = nn.Conv2d(in_channels=self.out_channels,
-                          out_channels=self.out_channels,
-                          kernel_size=kernel_size, padding=padding)
-        conv_stack1 = nn.Sequential(conv1, nn.ReLU(), conv2, nn.ReLU(), max_pool)
-        conv_stack2 = nn.Sequential(conv2, nn.ReLU(), conv2, nn.ReLU(), max_pool)
-        conv_stack3 = nn.Sequential(conv2, nn.ReLU(), conv2, nn.ReLU(), nn.AdaptiveAvgPool2d(3))
+        def max_pool():
+            return nn.MaxPool2d(2)
+        def conv2():
+            return nn.Conv2d(in_channels=self.out_channels, out_channels=self.out_channels,
+                             kernel_size=kernel_size, padding=padding)
+        conv_stack1 = nn.Sequential(conv1, nn.ReLU(), conv2(), nn.ReLU(), max_pool())
+        def conv_stack2():
+            return nn.Sequential(conv2(), nn.ReLU(), conv2(), nn.ReLU(), max_pool())
+        conv_stack3 = nn.Sequential(conv2(), nn.ReLU(), conv2(), nn.ReLU(), nn.AdaptiveAvgPool2d(3))
         self.conv_net = nn.Sequential()
         self.conv_net.append(conv_stack1)
         for i in range(n_intermediate):
-            self.conv_net.append(conv_stack2)
+            self.conv_net.append(conv_stack2())
         self.conv_net.append(conv_stack3)
         self.flatten = nn.Flatten()
         if dropout_rate > 0:
@@ -152,20 +140,21 @@ class CNN(nn.Module):
 
 
 class CNNBatchNorm(nn.Module):
-    """Basic 2D CNN network with batch normalization.
+    """Basic configurable 2D CNN network with batch normalization.
     
     Args:
-        out_channels:
+        out_channels (int):
             how many output channels/ conv filters
-        kernel_size:
+        kernel_size (int):
             kernel size for convolution
         padding:
             padding for the convolution operation:
             'same' or 'valid' or int or Tuple[int, int]
         dilation:
             dilation for the convolution operation
-        dropout_rate:
-            if nonzero, dropout rate for the final dense layer
+        dropout_rate (float):
+            if nonzero, dropout rate for the final dense layer.
+            if zero, dropout is not applied.
     """
     
     def __init__(self, out_channels: int = 8, n_intermediate: int = 1,
@@ -183,15 +172,17 @@ class CNNBatchNorm(nn.Module):
                              kernel_size=kernel_size, padding=padding)
         def batch_norm():
             return nn.BatchNorm2d(out_channels)
-        max_pool = nn.MaxPool2d(2)
+        def max_pool():
+            return nn.MaxPool2d(2)
 
-        conv_stack1 = nn.Sequential(conv(1, self.out_channels), batch_norm(), nn.ReLU(), max_pool)
-        conv_stack2 = nn.Sequential(conv(self.out_channels, self.out_channels), batch_norm(), nn.ReLU(), max_pool)
+        conv_stack1 = nn.Sequential(conv(1, self.out_channels), batch_norm(), nn.ReLU(), max_pool())
+        def conv_stack2():
+            return nn.Sequential(conv(self.out_channels, self.out_channels), batch_norm(), nn.ReLU(), max_pool())
         conv_stack3 = nn.Sequential(conv(self.out_channels, self.out_channels), batch_norm(), nn.ReLU(), nn.AdaptiveAvgPool2d(1))
         self.conv_net = nn.Sequential()
         self.conv_net.append(conv_stack1)
         for i in range(n_intermediate):
-            self.conv_net.append(conv_stack2)
+            self.conv_net.append(conv_stack2())
         self.conv_net.append(conv_stack3)
         self.flatten = nn.Flatten()
         if dropout_rate > 0:
@@ -207,81 +198,24 @@ class CNNBatchNorm(nn.Module):
         return logits
 
 
-class CNNRich(nn.Module):
-    """Basic 2D CNN network with configurable parameters and batch normalization.
-    
-    Args:
-        out_channels:
-            how many output channels/ conv filters
-        kernel_size:
-            kernel size for convolution
-        padding:
-            padding for the convolution operation:
-            'same' or 'valid' or int or Tuple[int, int]
-        dilation:
-            dilation for the convolution operation
-        dropout_rate:
-            if nonzero, dropout rate for the final dense layer
-    """
-    
-    def __init__(self, out_channels: int = 8, n_intermediate: int = 1,
-                 kernel_size: Union[int, Tuple[int, int]] = 3,
-                 padding: Union[int, Tuple[int, int], str] = 'same',
-                 stride: int = 1,
-                 dilation: Union[int, Tuple[int, int]] = 1,
-                 dropout_rate: float = 0):
-        super().__init__()
-        self.out_channels = out_channels
-        self.dropout_rate = dropout_rate
-        max_pool = nn.MaxPool2d(2)
-        def conv(in_channels, out_channels):
-            return nn.Conv2d(in_channels=in_channels,
-                             out_channels=out_channels, bias=False,
-                             kernel_size=kernel_size, padding=padding)
-        def batch_norm(out_channels):
-            return nn.BatchNorm2d(out_channels)
-        # two convolutions, with increasing number of filters before first pooling
-        conv_stack1 = nn.Sequential(conv(1, self.out_channels), batch_norm(self.out_channels), nn.ReLU(), conv(self.out_channels, 2* self.out_channels), batch_norm(2 * self.out_channels), nn.ReLU(), max_pool)
-        def conv_stack2(in_channels, out_channels):
-            return nn.Sequential(conv(in_channels, out_channels), batch_norm(out_channels), nn.ReLU(), conv(out_channels, out_channels), batch_norm(out_channels), nn.ReLU(), max_pool)
-        def conv_stack_last(in_channels):
-            return nn.Sequential(conv(in_channels, in_channels), batch_norm(in_channels), nn.ReLU(), nn.AdaptiveAvgPool2d(1))
-        self.conv_net = nn.Sequential()
-        self.conv_net.append(conv_stack1)
-        n = 1
-        for i in range(n_intermediate):
-            self.conv_net.append(conv_stack2(self.out_channels * (2 ** n), self.out_channels * (2 ** (n+1))))
-            n += 1
-        self.conv_net.append(conv_stack_last(self.out_channels * (2 ** (n_intermediate + 1))))
-        self.flatten = nn.Flatten()
-        if dropout_rate > 0:
-            self.dropout = nn.Dropout(p=dropout_rate)
-        self.dense = nn.Linear(self.out_channels * (2 ** (n_intermediate + 1)), 10)
-    
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        output = self.conv_net(x)
-        output = self.flatten(output)
-        if self.dropout_rate > 0:
-            output = self.dropout(output)
-        logits = self.dense(output)
-        return logits
-
-
 class CNN2(nn.Module):
-    """2D CNN network with two conv operations before each pooling. Configurable parameters.
+    """Configurable 2D CNN network with two conv operations before each pooling.
+
+    Doubles the number of convolution filters (out_channels) after each pooling.
     
     Args:
-        out_channels:
+        out_channels (int):
             how many output channels/ conv filters
-        kernel_size:
+        kernel_size (int):
             kernel size for convolution
         padding:
             padding for the convolution operation:
             'same' or 'valid' or int or Tuple[int, int]
         dilation:
             dilation for the convolution operation
-        dropout_rate:
-            if nonzero, dropout rate for the final dense layer
+        dropout_rate (float):
+            if nonzero, dropout rate for the final dense layer.
+            if zero, dropout is not applied.
     """
     
     def __init__(self, out_channels: int = 8, n_intermediate: int = 1,
@@ -293,7 +227,8 @@ class CNN2(nn.Module):
         super().__init__()
         self.out_channels = out_channels
         self.dropout_rate = dropout_rate
-        max_pool = nn.MaxPool2d(2)
+        def max_pool():
+            return nn.MaxPool2d(2)
         def conv(in_channels, out_channels):
             return nn.Conv2d(in_channels=in_channels,
                              out_channels=out_channels, bias=False,
@@ -301,9 +236,9 @@ class CNN2(nn.Module):
         def batch_norm(out_channels):
             return nn.BatchNorm2d(out_channels)
         # two convolutions, with increasing number of filters before first pooling
-        conv_stack1 = nn.Sequential(conv(1, self.out_channels), batch_norm(self.out_channels), nn.ReLU(), conv(self.out_channels, self.out_channels), batch_norm(self.out_channels), nn.ReLU(), max_pool)
+        conv_stack1 = nn.Sequential(conv(1, out_channels), batch_norm(out_channels), nn.ReLU(), conv(out_channels, out_channels), batch_norm(out_channels), nn.ReLU(), max_pool|())
         def conv_stack2(in_channels, out_channels):
-            return nn.Sequential(conv(in_channels, out_channels), batch_norm(out_channels), nn.ReLU(), conv(out_channels, out_channels), batch_norm(out_channels), nn.ReLU(), max_pool)
+            return nn.Sequential(conv(in_channels, out_channels), batch_norm(out_channels), nn.ReLU(), conv(out_channels, out_channels), batch_norm(out_channels), nn.ReLU(), max_pool())
         def conv_stack_last(in_channels):
             return nn.Sequential(conv(in_channels, in_channels), batch_norm(in_channels), nn.ReLU(), nn.AdaptiveAvgPool2d(1))
         self.conv_net = nn.Sequential()
@@ -317,65 +252,6 @@ class CNN2(nn.Module):
         if dropout_rate > 0:
             self.dropout = nn.Dropout(p=dropout_rate)
         self.dense = nn.Linear(self.out_channels * (2 ** n_intermediate), 10)
-    
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        output = self.conv_net(x)
-        output = self.flatten(output)
-        if self.dropout_rate > 0:
-            output = self.dropout(output)
-        logits = self.dense(output)
-        return logits
-
-
-class CNNExpand(nn.Module):
-    """Rapidly expanding CNN.
-    
-    Args:
-        out_channels:
-            how many output channels/ conv filters for first conv layer, then doubles with each conv stack
-        kernel_size:
-            kernel size for convolution
-        padding:
-            padding for the convolution operation:
-            'same' or 'valid' or int or Tuple[int, int]
-        dilation:
-            dilation for the convolution operation
-        dropout_rate:
-            if nonzero, dropout rate for the final dense layer
-    """
-    
-    def __init__(self, out_channels: int = 8, n_intermediate: int = 1,
-                 kernel_size: Union[int, Tuple[int, int]] = 3,
-                 padding: Union[int, Tuple[int, int], str] = 'same',
-                 stride: int = 1,
-                 dilation: Union[int, Tuple[int, int]] = 1,
-                 dropout_rate: float = 0):
-        super().__init__()
-        self.out_channels = out_channels
-        self.dropout_rate = dropout_rate
-        max_pool = nn.MaxPool2d(2)
-        def conv(in_channels, out_channels):
-            return nn.Conv2d(in_channels=in_channels,
-                             out_channels=out_channels, bias=False,
-                             kernel_size=kernel_size, padding=padding)
-        def batch_norm(out_channels):
-            return nn.BatchNorm2d(out_channels)
-        conv_stack1 = nn.Sequential(conv(1, self.out_channels), batch_norm(self.out_channels), nn.ReLU(), max_pool)
-        def conv_stack2(in_channels):
-            return nn.Sequential(conv(in_channels, 2 * in_channels), batch_norm(2 * in_channels), nn.ReLU(), max_pool)
-        def conv_stack_last(in_channels):
-            return nn.Sequential(conv(in_channels, 2 * in_channels), batch_norm(2 * in_channels), nn.ReLU(), nn.AdaptiveAvgPool2d(1))
-        self.conv_net = nn.Sequential()
-        self.conv_net.append(conv_stack1)
-        n = 0
-        for i in range(n_intermediate):
-            self.conv_net.append(conv_stack2(self.out_channels * (2 ** n)))
-            n += 1
-        self.conv_net.append(conv_stack_last(self.out_channels * (2 ** (n_intermediate))))
-        self.flatten = nn.Flatten()
-        if dropout_rate > 0:
-            self.dropout = nn.Dropout(p=dropout_rate)
-        self.dense = nn.Linear(self.out_channels * (2 ** (n_intermediate + 1)), 10)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         output = self.conv_net(x)

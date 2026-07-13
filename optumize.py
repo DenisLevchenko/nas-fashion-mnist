@@ -8,11 +8,17 @@ import lightning as L
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from optuna_integration.pytorch_lightning import PyTorchLightningPruningCallback
 from lightning_definitions import FashionMNISTNoAugment, FashionMNISTDataModule, LitModule
+from config import save_trial_config_from_study
 
-architecture_type = "cnn_batch"
-dm_augment = FashionMNISTDataModule(batch_size=128, affine_scale=None)
+architecture_type = "cnn_batch" # which of the CNN architectures to optimize.
+# all CNNs can use the same hyperparemeter search space
 
 def objective_mlp(trial):
+    """
+    Objective function for MLP optimization.
+    
+    Defines the hyperparameter search space and logic for
+    optimizing the MLP."""
     n_hidden = trial.suggest_int("n_hidden", 2, 4)
     size_hidden = trial.suggest_int("size_hidden", 64, 512, log=True)
     mlp_config = {
@@ -52,6 +58,11 @@ def objective_mlp(trial):
 
 
 def objective_cnn(trial):
+    """
+    Objective function for CNN optimization.
+    
+    Defines the hyperparameter search space and logic for
+    optimizing CNNs."""
     # dropout = trial.suggest_categorical("dropout", [True, False])
     dropout = True
     if dropout:
@@ -97,7 +108,7 @@ def objective_cnn(trial):
     trainer = L.Trainer(callbacks=[early_stop_callback], max_epochs=100) # can add pruning but unstable
     # init the datamodule. Augment the data for CNNs
     print("Initializing data module...")
-    
+    dm_augment = FashionMNISTDataModule(batch_size=128, affine_scale=None)
     print("Data module initialized. Fitting the model...")
     trainer.fit(lit_module, datamodule=dm_augment)
     
@@ -109,7 +120,7 @@ def objective_cnn(trial):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--architecture", type=str, default="mlp",
-                        help="Architecture type: mlp, cnn, cnn_rich, cnn_expand, cnn2")
+                        help="Architecture type: mlp, cnn_batch, cnn2")
     parser.add_argument("--n_trials", type=int, default=100,
                         help="Number of trials for optuna")
     parser.add_argument("--study_name", type=str, default="optuna_study",
@@ -126,25 +137,18 @@ def main():
         n_startup_trials=5, n_warmup_steps=10,
         interval_steps=1, n_min_trials=2
     )
-    # add pruner=pruner to use Optuna pruners. Appears to be unstable
+    # add pruner=pruner to use Optuna pruners. Appears to be unstable.
     study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize',
                                 load_if_exists=True)
-    if args.architecture == "mlp":
+    architecture_type = args.architecture
+    # optimize the right objective function depending on the architecture
+    if architecture_type == "mlp":
         study.optimize(objective_mlp, n_trials=args.n_trials)
     else:
         study.optimize(objective_cnn, n_trials=args.n_trials)
-    variable_params = study.best_params.copy()
-    set_params = study.best_trial.user_attrs.copy()
-    all_params = variable_params | set_params
-    optimizer_keys = ["lr", "weight_decay"] # for correctly separating optimizer params from net params in LitModule
-    optimizer_params = {k: all_params[k] for k in optimizer_keys if k in all_params}
-    net_params = {k: all_params[k] for k in all_params if k not in optimizer_keys}
-    lit_module_config = {'architecture_type': args.architecture,
-                         'net_params': net_params,
-                         'optimizer_params': optimizer_params}
-    full_config = {'lit_module_config': lit_module_config}
-    with open(f"{study_name}_best_params.yaml", "w") as f:
-        yaml.safe_dump(full_config, f, sort_keys=False)
+    # save the best hyperparameters
+    save_trial_config_from_study(study=study, architecture_type=architecture_type)
+
 
 if __name__ == "__main__":
     main()

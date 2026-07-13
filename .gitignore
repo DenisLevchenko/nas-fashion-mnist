@@ -1,6 +1,7 @@
 *.ipynb
 !conclusions.ipynb
-!optuna_experiments.ipynb
+!optuna_study_exploration.ipynb
+!dataset_exploration.ipynb
 *.pth
 __pycache__
 lightning_logs
