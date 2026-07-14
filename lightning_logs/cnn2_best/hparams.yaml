@@ -1,0 +1,23 @@
+affine_degrees: 0
+affine_scale: null
+affine_translate: !!python/tuple
+- 0.1
+- 0.1
+architecture_type: cnn2
+batch_size: 128
+data_dir: ~/Coding/torch_tutorial
+flip_p: 0.5
+net_params:
+  dilation: 1
+  dropout_rate: 0.19288385700893612
+  kernel_size: 3
+  n_intermediate: 2
+  out_channels: 202
+  padding: same
+num_workers: 4
+optimizer_params:
+  lr: 0.0002491521389848629
+  weight_decay: 4.166799052610572e-05
+pin_memory: true
+seed: 42
+val_fraction: 0.2

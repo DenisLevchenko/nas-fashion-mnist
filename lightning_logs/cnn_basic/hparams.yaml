@@ -1,0 +1,17 @@
+affine_degrees: 0
+affine_scale: null
+affine_translate: !!python/tuple
+- 0.1
+- 0.1
+architecture_type: cnn_basic
+batch_size: 128
+data_dir: ~/Coding/torch_tutorial
+flip_p: 0.5
+net_params: {}
+num_workers: 4
+optimizer_params:
+  lr: 0.01
+  weight_decay: 0.001
+pin_memory: true
+seed: 42
+val_fraction: 0.2

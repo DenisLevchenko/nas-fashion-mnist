@@ -236,7 +236,7 @@ class CNN2(nn.Module):
         def batch_norm(out_channels):
             return nn.BatchNorm2d(out_channels)
         # two convolutions, with increasing number of filters before first pooling
-        conv_stack1 = nn.Sequential(conv(1, out_channels), batch_norm(out_channels), nn.ReLU(), conv(out_channels, out_channels), batch_norm(out_channels), nn.ReLU(), max_pool|())
+        conv_stack1 = nn.Sequential(conv(1, out_channels), batch_norm(out_channels), nn.ReLU(), conv(out_channels, out_channels), batch_norm(out_channels), nn.ReLU(), max_pool())
         def conv_stack2(in_channels, out_channels):
             return nn.Sequential(conv(in_channels, out_channels), batch_norm(out_channels), nn.ReLU(), conv(out_channels, out_channels), batch_norm(out_channels), nn.ReLU(), max_pool())
         def conv_stack_last(in_channels):

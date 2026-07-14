@@ -1,0 +1,7 @@
+architecture_type: mlp
+net_params:
+  n_hidden: 2
+  size_hidden: 810
+optimizer_params:
+  lr: 0.001
+  weight_decay: 1.0e-05
