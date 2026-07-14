@@ -9,10 +9,10 @@ Recreate python environment:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-lock.txt
 ```
 ## Project Structure
-### `conclusions.ipynb`
+### `overview.ipynb`
 This notebook goes through the optimization journey, from a basic fixed MLP, to an optimized one, to a basic and then optimized CNN.  
 It shows the usage of the various modules below.
 
@@ -51,6 +51,4 @@ Creates a .yaml hyperparameter configuration file in the `configs` directory. Ea
 The .yaml file can be used by `run_with_lightning.py`.
 
 ### `dataset_exploration.ipynb`
-checks the size and balance of the Fashion-MNIST dataset used for this project.
-
-TODO: Explain task and datasets on top. Add sample images?
+checks the size and balance of the Fashion-MNIST dataset used for this project, also has sample images for visualization.
