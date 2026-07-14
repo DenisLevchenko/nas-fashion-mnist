@@ -1,6 +1,5 @@
-# Neural net architecture optimization on Fashion-MNIST
-Using `Optuna`, `PyTorch`, and `Lightning`.
-Monitoring on `Tensorboard`.
+# Modular neural net hyperparameter optimization on Fashion-MNIST
+Uses `Optuna`, `PyTorch`, and `Lightning`. Monitoring on `Tensorboard`.
 
 Lightning will automatically detect and use all available GPUs.
 
@@ -37,7 +36,7 @@ Uses chekpointing and early stopping during training, saves the best model weigh
 `load_and_test` will load a model from a given path to weights and test it (without re-training).  
 
 Can also be run from the terminal.  
-The full training, validation (if either are applicable), and testing is logged, logs kept in the `lightning_logs` folder. One can run `tensorboard --logdir lightning_logs` to start `tensorboard` and explore the full training dynamic, compare between runs, etc.
+The full training, validation (if either are applicable), and testing is logged, logs kept in the `lightning_logs` directory. One can run `tensorboard --logdir lightning_logs` to start `tensorboard` and explore the full training dynamic, compare between runs, etc.
 
 ### `optumize.py`
 does the hyperparameter optimization of the `LitModule` on the `FashionMNISTDataModule` using `Optuna`, saving results in a `.db` file (in the `optuna_databases` folder) that can be explored and visualized later to understand the importance and best values for the hyperparameters, whether another optimization is needed, etc. It saves the best hyperparameters found in a `.yaml` file.
@@ -46,7 +45,12 @@ By default uses Optuna's TPE (tree Parzen estimators) sampler and median pruner 
 ### `optuna_study_exploration.ipynb`
 showcases several standard Optuna commands one can use to explore and visialize optuna studies. Uses the databases from Optuna studies in this project as examples.
 
+### `config.py`
+Creates a .yaml hyperparameter configuration file in the `configs` directory. Easy to edit and experiment.
+
+The .yaml file can be used by `run_with_lightning.py`.
+
 ### `dataset_exploration.ipynb`
 checks the size and balance of the Fashion-MNIST dataset used for this project.
 
-TODO: add selected optuna databases and lightning_logs.
+TODO: Explain task and datasets on top. Add sample images?

@@ -1,5 +1,5 @@
 """
-Basic script for creating a .yaml config file.
+Basic script for creating a .yaml hyperparameter config file.
 
 Easy to edit and add parameters.
 The resulting .yaml config file can be used by train_and_test_from_yaml from run_with_lightning.py
@@ -71,6 +71,16 @@ full_config = {'lit_module_config' : lit_module_config,
 }
 
 def save_trial_config_from_study(study, architecture_type: str, trial_number: int | None = None):
+    """
+    Saves a specific trial hyperparameter configuration from an Optuna study.
+    
+    Defaults to saving the best trial, but a specific number can be saved too.
+
+    Args:
+        study: Optuna study
+        architecture_type (str): neural architecture type of the network
+        trial_number (int | None): specific trial number. If None saves the best trial.
+    """
     optimizer_keys = ['lr', 'weight_decay'] # for correctly separating optimizer params from the rest
     config_dir = 'configs'
     if trial_number is not None:
