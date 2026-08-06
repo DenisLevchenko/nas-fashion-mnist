@@ -3,6 +3,7 @@ LightningModule definitions: model module, DataModules.
 """
 
 from dataclasses import dataclass, asdict
+import os
 import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader, TensorDataset, random_split, Subset
@@ -17,6 +18,16 @@ from architectures import MLPBasic, MLP, CNNBasic, CNN, CNNBatchNorm, CNN2
 # Fashion-MNIST channel statistics (single channel, pre-computed)
 _MEAN = (0.2860,)
 _STD  = (0.3530,)
+
+# Default dataset location can be overridden with the environment variable
+# FASHIONMNIST_DATA_DIR or by passing data_dir to the DataModule constructor.
+_DEFAULT_DATA_DIR = os.getenv("FASHIONMNIST_DATA_DIR", "./data")
+
+
+def _resolve_data_dir(explicit_data_dir: str | None = None) -> str:
+    """Resolve the dataset root from an explicit argument or environment variable."""
+    return os.path.expanduser(explicit_data_dir or _DEFAULT_DATA_DIR)
+
 
 # matches architecture type name to the appropriate PyTorch class
 architectures = {
@@ -108,9 +119,9 @@ class FashionMNISTNoAugment(L.LightningDataModule):
         batch_size:     Mini-batch size for all dataloaders.
     """
    
-    def __init__(self, data_dir: str = "~/Coding/torch_tutorial", batch_size: int = 128):
+    def __init__(self, data_dir: str | None = None, batch_size: int = 128):
         super().__init__()
-        self.data_dir = data_dir
+        self.data_dir = _resolve_data_dir(data_dir)
         self.batch_size = batch_size
     
     def prepare_data(self):
@@ -189,7 +200,7 @@ class FashionMNISTDataModule(L.LightningDataModule):
 
     def __init__(
         self,
-        data_dir: str = "~/Coding/torch_tutorial",
+        data_dir: str | None = None,
         val_fraction: float = 0.2,
         batch_size: int = 128,
         num_workers: int = 4,
@@ -203,6 +214,7 @@ class FashionMNISTDataModule(L.LightningDataModule):
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
+        self.data_dir = _resolve_data_dir(self.hparams.data_dir)
 
         # Transforms shared by val and test (no augmentation)
         self._base_transform = T.Compose([
@@ -232,8 +244,8 @@ class FashionMNISTDataModule(L.LightningDataModule):
 
     def prepare_data(self) -> None:
         """Download the dataset (called on a single process in DDP)."""
-        datasets.FashionMNIST(self.hparams.data_dir, train=True,  download=True)
-        datasets.FashionMNIST(self.hparams.data_dir, train=False, download=True)
+        datasets.FashionMNIST(self.data_dir, train=True,  download=True)
+        datasets.FashionMNIST(self.data_dir, train=False, download=True)
 
     def setup(self, stage: str | None = None) -> None:
         """
@@ -251,10 +263,10 @@ class FashionMNISTDataModule(L.LightningDataModule):
             # Load the full training split twice so each subset gets
             # its own transform without any data leakage.
             full_train_aug  = datasets.FashionMNIST(
-                self.hparams.data_dir, train=True, transform=self._train_transform
+                self.data_dir, train=True, transform=self._train_transform
             )
             full_train_base = datasets.FashionMNIST(
-                self.hparams.data_dir, train=True, transform=self._base_transform
+                self.data_dir, train=True, transform=self._base_transform
             )
 
             n_total = len(full_train_aug)
@@ -279,7 +291,7 @@ class FashionMNISTDataModule(L.LightningDataModule):
 
         if stage in ("test", None):
             self.test_dataset = datasets.FashionMNIST(
-                self.hparams.data_dir, train=False, transform=self._base_transform
+                self.data_dir, train=False, transform=self._base_transform
             )
 
     # ------------------------------------------------------------------

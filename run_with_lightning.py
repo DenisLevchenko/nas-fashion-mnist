@@ -1,7 +1,7 @@
 """
 Main script using PyTorch Lightning.
 
-Uses MLP and CNN architectures are defined in the `architectures.py` file.
+Uses MLP and CNN architectures defined in the `architectures.py` file.
 Also does validation and testing, logs everything.
 The logs are accessible through TensorBoard.
 Uses early stopping and saves the best model.
