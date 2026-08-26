@@ -90,6 +90,45 @@ class LitModule(L.LightningModule):
         self.log("test_accuracy", test_acc)
         # self.test_step_outputs.append(test_acc)
 
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through the network."""
+        return self.net(x)
+
+    @torch.no_grad()
+    def predict(self, x: torch.Tensor) -> tuple[int, float] | list[tuple[int, float]]:
+        """
+        Predict classes and top probabilities for a single grayscale image or a batch.
+
+        Args:
+            x: input tensor with shape [H, W] or [B, H, W].
+
+        Returns:
+            Single image: (int_label, float_probability).
+            Batch: list[ (int_label, float_probability), ... ].
+        """
+        if self.training:
+            raise RuntimeError("predict() must be called on an eval-mode model after training.")
+
+        if x.dim() == 2:
+            x = x.unsqueeze(0).unsqueeze(0)
+        elif x.dim() == 3:
+            x = x.unsqueeze(1)
+        else:
+            raise ValueError("Expected input tensor with shape [H, W] or [B, H, W].")
+
+        x = x.to(self.device)
+        logits = self.net(x)
+        probs = nn.functional.softmax(logits, dim=-1)
+        top_probs, preds = probs.max(dim=-1)
+
+        preds = preds.cpu()
+        top_probs = top_probs.cpu()
+
+        if preds.shape[0] == 1:
+            return int(preds.item()), float(top_probs.item())
+
+        return [(int(p.item()), float(tp.item())) for p, tp in zip(preds, top_probs)]
+
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), **self.hparams.optimizer_params)
         return optimizer
